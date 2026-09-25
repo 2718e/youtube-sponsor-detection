@@ -1,5 +1,5 @@
-// A stand-in for TypeSafeClient that answers the way Jev would on an obvious
-// case, and records every request so the tests can check what we send.
+// A stand-in for a Jev-compatible model that answers the way Jev would on an
+// obvious case, and records every request so the tests can check what we send.
 //
 // It spots three kinds of line by keyword: where the sponsor is named, where
 // a lead-in story begins, and where the creator hands back to the video.

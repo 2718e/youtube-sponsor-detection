@@ -32,7 +32,9 @@ form.addEventListener('submit', (event) => {
 fetch('/api/health')
   .then((r) => r.json())
   .then((h) => {
-    if (!h.typesafeKey) show(banner, 'error', 'No TypeSafe API key on the server. Set TYPESAFE_API_KEY in .env and restart.');
+    if (!h.ready) {
+      show(banner, 'error', `No API key for ${h.provider?.label ?? 'the model'}. Set MODEL_API_KEY in .env and restart.`);
+    }
   })
   .catch(() => {});
 

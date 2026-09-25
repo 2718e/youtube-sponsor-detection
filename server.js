@@ -1,35 +1,39 @@
-// Sponsor-skip demo server. The API key stays here, server-side: the browser
-// only ever talks to this process.
+// Sponsor-skip demo server. The model configuration stays here, server-side:
+// the browser only ever talks to this process.
 
 import express from 'express';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { TypeSafeClient } from '@typesafe-ai/sdk';
 
 import { parseVideoId, fetchTranscript, parsePastedTranscript, TranscriptUnavailable } from './src/youtube.js';
 import { buildLines, formatTimestamp } from './src/transcript.js';
 import { findSponsorSegment } from './src/jev.js';
+import { providerFromEnv } from './src/providers/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(here, 'public')));
 
-const hasKey = Boolean(process.env.TYPESAFE_API_KEY);
-// One client for the process: it holds the key, retry policy and timeouts.
-const client = hasKey ? new TypeSafeClient({ timeout: 30_000 }) : null;
+// One provider for the process: it holds the URL, key, model and timeouts.
+// Point MODEL_URL at api.typesafe.ai or at a local Jev-compatible server.
+const provider = providerFromEnv();
+const ready = provider.hasKey;
 
 app.get('/api/health', (_req, res) => {
-  res.json({ typesafeKey: hasKey });
+  res.json({
+    ready,
+    provider: { protocol: provider.protocol, label: provider.label, url: provider.url, model: provider.model ?? null, isLocal: provider.isLocal }
+  });
 });
 
 app.post('/api/analyze', async (req, res) => {
   const { url, transcript } = req.body ?? {};
 
-  if (!hasKey) {
+  if (!ready) {
     return res.status(503).json({
-      error: 'No TYPESAFE_API_KEY set. Put your TypeSafe key in .env and restart the server.'
+      error: `No API key for ${provider.label}. Set MODEL_API_KEY in .env and restart the server.`
     });
   }
 
@@ -39,7 +43,7 @@ app.post('/api/analyze', async (req, res) => {
     if (!lines.length) return res.status(422).json({ error: 'That transcript came back empty.' });
 
     const started = Date.now();
-    const result = await findSponsorSegment(lines, { client, title: source.title });
+    const result = await findSponsorSegment(lines, { client: provider, model: provider.model, title: source.title, thresholds: provider.thresholds });
 
     res.json({
       video: { id: source.videoId, title: source.title, source: source.kind },
@@ -51,9 +55,6 @@ app.post('/api/analyze', async (req, res) => {
     if (error instanceof TranscriptUnavailable) {
       if (error.cause) console.warn(`transcript unavailable: ${error.cause}`);
       return res.status(422).json({ error: error.message, detail: error.cause ?? null, canPaste: true });
-    }
-    if (error?.status === 401) {
-      return res.status(502).json({ error: 'TypeSafe rejected the API key.' });
     }
     console.error(error);
     res.status(500).json({ error: error?.message ?? 'Something went wrong.' });
@@ -97,5 +98,6 @@ function decorate(result) {
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, () => {
   console.log(`Sponsor skip demo on http://localhost:${port}`);
-  if (!hasKey) console.log('No TYPESAFE_API_KEY found — set one in .env before analysing a video.');
+  console.log(`Model: ${provider.label} at ${provider.endpoint}${provider.model ? ` (${provider.model})` : ''}`);
+  if (!ready) console.log(`No API key for ${provider.label} — set MODEL_API_KEY in .env before analysing a video.`);
 });

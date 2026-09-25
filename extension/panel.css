@@ -54,7 +54,7 @@
   border-top: 1px solid #2a2f3a;
 }
 #sponsor-skip-panel .ss-range { flex: 1; font-variant-numeric: tabular-nums; font-weight: 600; color: #ffcc4d; white-space: nowrap; }
-#sponsor-skip-panel .ss-pill, #sponsor-skip-panel .ss-verdict {
+#sponsor-skip-panel .ss-pill {
   flex: none;
   min-width: 46px;
   text-align: center;
@@ -67,34 +67,8 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-#sponsor-skip-panel .ss-verdict { min-width: 92px; }
-#sponsor-skip-panel .ss-pill.good, #sponsor-skip-panel .ss-verdict.good { color: #58d68d; border-color: #2c5a41; }
-#sponsor-skip-panel .ss-pill.warn, #sponsor-skip-panel .ss-verdict.warn { color: #f5a25d; border-color: #5c4327; }
-
-/* Audio line: dot, two fixed lines of text, verdict */
-#sponsor-skip-panel .ss-audio {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 44px;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid #2a2f3a;
-}
-#sponsor-skip-panel .ss-audio-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #555; }
-#sponsor-skip-panel .ss-audio-dot.on { background: #58d68d; box-shadow: 0 0 0 3px rgba(88, 214, 141, 0.18); }
-#sponsor-skip-panel .ss-audio-dot.busy { background: #ffcc4d; animation: ss-pulse 1s infinite; }
-#sponsor-skip-panel .ss-audio-dot.bad { background: #e26a6a; }
-#sponsor-skip-panel .ss-audio-main { flex: 1; min-width: 0; }
-#sponsor-skip-panel .ss-audio-label, #sponsor-skip-panel .ss-audio-heard {
-  height: 18px;
-  line-height: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#sponsor-skip-panel .ss-audio-label { color: #c7cdd8; }
-#sponsor-skip-panel .ss-audio-heard { color: #7f8797; font-size: 12px; font-style: italic; }
+#sponsor-skip-panel .ss-pill.good { color: #58d68d; border-color: #2c5a41; }
+#sponsor-skip-panel .ss-pill.warn { color: #f5a25d; border-color: #5c4327; }
 
 /* Controls */
 #sponsor-skip-panel .ss-controls {
@@ -126,38 +100,12 @@
 #sponsor-skip-panel .ss-button.ss-icon { background: transparent; color: #9aa3b2; padding: 0 4px; font-size: 14px; height: auto; }
 #sponsor-skip-panel .ss-button.ss-small, .ss-toast .ss-button.ss-small { font-size: 12px; min-width: 64px; }
 #sponsor-skip-panel .ss-button.ss-quiet { background: #262b36; color: #c7cdd8; }
-#sponsor-skip-panel .ss-button.ss-ghost { visibility: hidden; }
-#sponsor-skip-panel .ss-button.ss-link { background: transparent; color: #9aa3b2; padding: 0; height: 18px; font-weight: 500; font-size: 12px; }
-#sponsor-skip-panel .ss-button.ss-link:hover { color: #e8eaf0; }
 
 /* Usage */
 #sponsor-skip-panel .ss-stats { margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a2f3a; }
 #sponsor-skip-panel .ss-stat { display: flex; gap: 10px; height: 18px; line-height: 18px; color: #9aa3b2; font-size: 12px; }
-#sponsor-skip-panel .ss-stat-label { flex: none; width: 64px; white-space: nowrap; }
+#sponsor-skip-panel .ss-stat-label { flex: none; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #sponsor-skip-panel .ss-stat-value { flex: 1; min-width: 0; color: #c7cdd8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-
-/* Log */
-#sponsor-skip-panel .ss-log { margin-top: 4px; }
-#sponsor-skip-panel .ss-log-head { display: flex; align-items: center; justify-content: space-between; height: 22px; }
-#sponsor-skip-panel .ss-log-list {
-  height: 150px;
-  overflow-y: auto;
-  margin-top: 2px;
-  padding: 4px 6px;
-  border: 1px solid #2a2f3a;
-  border-radius: 8px;
-  background: #0f1115;
-  font-size: 11px;
-  line-height: 1.4;
-  user-select: text;
-}
-#sponsor-skip-panel .ss-log-line { display: flex; gap: 6px; padding: 1px 0; color: #9aa3b2; }
-#sponsor-skip-panel .ss-log-time { flex: none; font-variant-numeric: tabular-nums; color: #6b7280; }
-#sponsor-skip-panel .ss-log-text { word-break: break-word; }
-#sponsor-skip-panel .ss-log-line.heard .ss-log-text { color: #c7cdd8; font-style: italic; }
-#sponsor-skip-panel .ss-log-line.check .ss-log-text { color: #e8eaf0; }
-#sponsor-skip-panel .ss-log-line.jump .ss-log-text { color: #ffcc4d; font-weight: 600; }
-#sponsor-skip-panel .ss-log-line.error .ss-log-text { color: #f3c2c2; }
 
 .sponsor-skip-marker {
   position: absolute;

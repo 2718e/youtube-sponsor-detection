@@ -1,24 +1,28 @@
 // Score the pipeline against SponsorBlock's community labels.
 //
 //   npm run eval                      # eval/videos.json (+ eval/videos.seed.json)
-//   npm run eval -- --limit 5 --fresh # first five videos, ignore cached Jev results
+//   npm run eval -- --limit 5 --fresh # first five videos, ignore cached model results
 //   npm run eval -- --lines           # score the same runs at line boundaries, without the cut pass
 //
 // For each video: fetch the transcript, run the pipeline, and compare the
-// segments Jev found with SponsorBlock's. Results are cached per video in
+// segments the model found with SponsorBlock's. Results are cached per video in
 // eval/cache/ so re-scoring after a question change only re-runs with --fresh.
 //
 // The transcript comes from eval/transcripts/ when `npm run transcripts` has
-// saved it there, so the eval itself only needs to reach Jev.
+// saved it there, so the eval itself only needs to reach the model.
+//
+// MODEL_URL, MODEL_MODEL and MODEL_API_KEY choose the model, exactly as the
+// extension and the web app do. Run it once per provider to compare, and to
+// re-tune that provider's thresholds.
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { TypeSafeClient } from '@typesafe-ai/sdk';
 
 import { fetchTranscript } from '../src/youtube.js';
 import { buildLines, formatTimestamp } from '../src/transcript.js';
 import { findSponsorSegment } from '../src/jev.js';
 import { evalVideos, savedTranscript } from '../src/eval-videos.js';
+import { providerFromEnv } from '../src/providers/index.js';
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(n);
@@ -30,8 +34,9 @@ const START_TOLERANCE = Number(opt('--tolerance', 15));
 /** Labels are placed by hand, so a boundary this close to one is not counted as cutting content. */
 const CONTENT_SLACK = 1;
 
-if (!process.env.TYPESAFE_API_KEY) {
-  console.error('Set TYPESAFE_API_KEY first (or put it in .env).');
+const provider = providerFromEnv();
+if (!provider.hasKey) {
+  console.error(`No API key for ${provider.label}. Set MODEL_API_KEY in .env, or point MODEL_URL at a local server.`);
   process.exit(1);
 }
 
@@ -42,7 +47,6 @@ if (!videos.length) {
 }
 
 await mkdir('eval/cache', { recursive: true });
-const client = new TypeSafeClient({ timeout: 30_000 });
 const rows = [];
 
 for (const video of videos.slice(0, limit)) {
@@ -63,7 +67,7 @@ for (const video of videos.slice(0, limit)) {
         throw new Error(`labels run past the end of the transcript (${formatTimestamp(transcriptEnd)})`);
       }
       const started = Date.now();
-      const result = await findSponsorSegment(lines, { client, title });
+      const result = await findSponsorSegment(lines, { client: provider, model: provider.model, title, thresholds: provider.thresholds });
       run = {
         title,
         route,

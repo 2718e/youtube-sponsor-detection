@@ -9,62 +9,42 @@
 <header class="top">
   <div>
     <h1>Sponsor Skip</h1>
-    <p class="sub">Skips sponsor reads on YouTube. Jev decides what counts as a sponsor read.</p>
+    <p class="sub">Skips sponsor reads on YouTube. A typed-question model decides what counts as one.</p>
   </div>
   <span id="statusPill" class="pill">…</span>
 </header>
 
 <section>
-  <h2>Skip mode</h2>
-  <div class="modes" id="modes">
-    <label class="mode">
-      <input type="radio" name="mode" value="transcript" />
-      <span class="mode-body">
-        <span class="mode-name">Transcript only <em>default</em></span>
-        <span class="mode-desc">Skips whole sponsor reads found in the captions. Cheapest, but the video must have captions.</span>
-      </span>
-    </label>
-    <label class="mode">
-      <input type="radio" name="mode" value="smart" />
-      <span class="mode-body">
-        <span class="mode-name">Smart</span>
-        <span class="mode-desc">Finds sponsor reads in the captions, listens to confirm one is playing, then jumps to its end. Listens only near the reads.</span>
-      </span>
-    </label>
-    <label class="mode">
-      <input type="radio" name="mode" value="live" />
-      <span class="mode-body">
-        <span class="mode-name">Listen only</span>
-        <span class="mode-desc">No captions needed. Listens as the video plays and jumps ahead in short steps while a sponsor read is heard.</span>
-      </span>
-    </label>
-  </div>
-  <p class="hint" id="modeHint"></p>
-</section>
-
-<section>
-  <h2>Keys</h2>
+  <h2>Model provider</h2>
+  <label class="field inline">
+    <span>Protocol</span>
+    <select id="protocol"></select>
+  </label>
+  <label class="field">
+    <span>Server URL</span>
+    <input id="modelUrl" type="text" spellcheck="false" placeholder="https://api.typesafe.ai" />
+  </label>
+  <label class="field">
+    <span>Model</span>
+    <input id="model" type="text" spellcheck="false" placeholder="jev-latest" />
+  </label>
   <div class="key">
-    <div class="key-head"><span>TypeSafe key (required)</span><span class="key-state" id="keyState"></span></div>
+    <div class="key-head"><span>API key <em>(only ever sent to api.typesafe.ai)</em></span><span class="key-state" id="keyState"></span></div>
     <div class="row"><input id="apiKey" type="password" placeholder="Paste your TypeSafe key" autocomplete="off" /><button id="saveKey" type="button">Save</button></div>
   </div>
-  <div class="key">
-    <div class="key-head"><span>Deepgram key (for Smart and Listen only)</span><span class="key-state" id="deepgramKeyState"></span></div>
-    <div class="row"><input id="deepgramKey" type="password" placeholder="Paste your Deepgram key" autocomplete="off" /><button id="saveDeepgramKey" type="button">Save</button></div>
+  <div class="row buttons">
+    <button id="saveProvider" type="button">Save provider</button>
+    <button id="testProvider" type="button" class="quiet">Test</button>
   </div>
-  <p class="hint">Keys stay in this browser. Get them at <a href="https://typesafe.ai" target="_blank">typesafe.ai</a> and <a href="https://console.deepgram.com" target="_blank">console.deepgram.com</a>.</p>
+  <p class="hint" id="providerState"></p>
 </section>
 
 <section>
   <h2>Skipping</h2>
   <label class="switch"><input id="autoSkip" type="checkbox" /><span>Skip automatically</span></label>
   <label class="field">
-    <span>Skip only when Jev is at least <output id="thresholdOut">70%</output> sure</span>
+    <span>Skip only when the model is at least <output id="thresholdOut">70%</output> sure</span>
     <input id="threshold" type="range" min="0.35" max="0.95" step="0.05" />
-  </label>
-  <label class="field inline" id="stepField">
-    <span>Jump ahead by ear in steps of</span>
-    <span class="unit"><input id="liveSkipSeconds" type="number" min="5" max="60" step="1" /> s</span>
   </label>
 </section>
 
@@ -76,15 +56,17 @@
 
 <details>
   <summary>Advanced</summary>
-  <label class="field inline"><span>Jev model</span><input id="model" type="text" /></label>
-  <label class="field inline"><span>Jev price ($ per 1M input tokens)</span><input id="price" type="number" step="0.001" min="0" /></label>
-  <label class="field inline"><span>Speech price ($ per minute)</span><input id="sttPrice" type="number" step="0.0001" min="0" /></label>
-  <p class="hint">Prices are only used for the cost estimates. Defaults are the list prices at <a href="https://docs.typesafe.ai/models" target="_blank">docs.typesafe.ai/models</a> and deepgram.com/pricing.</p>
+  <label class="field inline"><span>Price ($ per 1M input tokens)</span><input id="price" type="number" step="0.001" min="0" /></label>
+  <p class="hint">Only used for the cost estimate. A local server is not priced.</p>
+  <h2>Model calibration</h2>
+  <label class="field inline"><span>Confident from</span><input id="engineFound" type="number" step="0.05" min="0" max="1" /></label>
+  <label class="field inline"><span>Worth refining from</span><input id="engineMaybe" type="number" step="0.05" min="0" max="1" /></label>
+  <label class="field inline"><span>Sure enough to skip a phrase</span><input id="engineKeep" type="number" step="0.05" min="0" max="1" /></label>
+  <p class="hint">Probabilities mean different things to different models, so these bands are per provider. Re-tune them with <code>npm run eval</code> after swapping one in.</p>
   <div class="row buttons">
+    <button id="resetEngine" type="button" class="quiet small">Use provider defaults</button>
     <button id="clearCache" type="button" class="quiet small">Clear cached results</button>
-    <button id="liveToggle" type="button" class="quiet small">Start listening in this tab</button>
   </div>
-  <p class="hint" id="liveState"></p>
 </details>
 <script src="popup.js"></script>
 </body>

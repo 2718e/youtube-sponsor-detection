@@ -26,6 +26,14 @@ import { renderLines, windowLines, estimateTokens, buildPhrases } from './transc
 export const FOUND = 0.7;
 export const MAYBE = 0.35;
 
+/**
+ * The bands above are calibrated to Jev's own probabilities, so they do not
+ * transfer to a different model unchanged. A provider carries its own defaults
+ * (see src/providers) and callers may override them per run; nothing else in
+ * this file needs to know which model answered.
+ */
+export const DEFAULT_THRESHOLDS = { found: FOUND, maybe: MAYBE, keepContent: 0.8 };
+
 /** Lines of context kept around the anchor in the refine pass. A lead-in
  *  story can run three or four minutes before the sponsor is even named, so
  *  the reach backwards is generous. */
@@ -246,13 +254,15 @@ const BLIND_MASK_LINES = 12;
  *
  * @param {Line[]} lines
  * @param {{ client: { systemOne: (request: any) => Promise<any> }, model?: string,
- *           title?: string, onProgress?: (e: any) => void }} opts
+ *           title?: string, thresholds?: Partial<typeof DEFAULT_THRESHOLDS>,
+ *           onProgress?: (e: any) => void }} opts
  */
 export async function findSponsorSegment(lines, opts) {
   const client = opts?.client;
   if (!client) throw new Error('findSponsorSegment needs a client with systemOne()');
   const model = opts.model;
   const title = opts.title ?? 'unknown';
+  const limits = { ...DEFAULT_THRESHOLDS, ...(opts.thresholds ?? {}) };
   const report = opts.onProgress ?? (() => {});
 
   if (!lines.length) {
@@ -312,11 +322,11 @@ export async function findSponsorSegment(lines, opts) {
     // choice that puts little weight on "none" (a read without the usual
     // "sponsored by" wording can score low on the first and high on the
     // second). The refine pass's own noul then confirms or rejects it.
-    const candidates = scans.filter((s) => looksLikeSponsor(s) >= MAYBE && s.startLineId && !taken.has(s.startLineId));
+    const candidates = scans.filter((s) => looksLikeSponsor(s) >= limits.maybe && s.startLineId && !taken.has(s.startLineId));
     if (!candidates.length) break;
     const winner = candidates.reduce((a, b) => (looksLikeSponsor(b) > looksLikeSponsor(a) ? b : a));
 
-    const segment = await refine(winner, lines, taken, ask, report, title);
+    const segment = await refine(winner, lines, taken, ask, report, title, limits);
     if (segment) {
       segments.push(segment);
       for (const id of segment.lineIds) taken.add(id);
@@ -339,7 +349,7 @@ export async function findSponsorSegment(lines, opts) {
   const best = segments.reduce((a, b) => (!a || b.confidence > a.confidence ? b : a), null);
   const status = !segments.length
     ? 'not-found'
-    : segments.some((s) => s.confidence >= FOUND)
+    : segments.some((s) => s.confidence >= limits.found)
       ? 'found'
       : 'uncertain';
 
@@ -362,7 +372,7 @@ export async function findSponsorSegment(lines, opts) {
  * naming line written into the state, reads backwards for the first line of
  * the lead-in. Returns null when the refine pass rejects the candidate.
  */
-async function refine(winner, lines, taken, ask, report, title) {
+async function refine(winner, lines, taken, ask, report, title, limits) {
   const centre = lines.findIndex((l) => l.id === winner.startLineId);
   const from = Math.max(0, centre - REFINE_BEFORE);
   const slice = lines.slice(from, Math.min(lines.length, centre + REFINE_AFTER)).filter((l) => !taken.has(l.id));
@@ -379,7 +389,7 @@ async function refine(winner, lines, taken, ask, report, title) {
   );
 
   const presence = anchored.answers.has_sponsor.noul;
-  if (presence < MAYBE) return null;
+  if (presence < limits.maybe) return null;
 
   const anchorPick = bestLabel(anchored.answers.anchor_line.probabilities, allowed);
   const endPick = bestLabel(anchored.answers.end_line.probabilities, allowed);
@@ -421,8 +431,8 @@ async function refine(winner, lines, taken, ask, report, title) {
   // really begins and ends. Both edges are independent, so they run together.
   report({ stage: 'cut' });
   let [startCut, endCut] = await Promise.all([
-    cut(lines, startLine, 'start', ask, title, anchorLine),
-    endOk ? cut(lines, endLine, 'end', ask, title, anchorLine) : null
+    cut(lines, startLine, 'start', ask, title, anchorLine, limits),
+    endOk ? cut(lines, endLine, 'end', ask, title, anchorLine, limits) : null
   ]);
   // A read of a few words can end up with its end cut before its start (no
   // phrase was surely sponsor); the line-level end stands then.
@@ -463,7 +473,7 @@ async function refine(winner, lines, taken, ask, report, title) {
  * segment begins or ends. Returns null when the answers give no cut, in which
  * case the line-level boundary stands.
  */
-async function cut(lines, line, edge, ask, title, anchorLine) {
+async function cut(lines, line, edge, ask, title, anchorLine, limits) {
   const at = lines.indexOf(line);
   if (at < 0) return null;
   // The end line is the one most often a line late (a "[Music]" or a hand-back
@@ -486,7 +496,7 @@ async function cut(lines, line, edge, ask, title, anchorLine) {
     cutQuestions(phrases)
   );
   const inSponsor = phrases.map((p) => result.answers[p.id]?.noul ?? 0);
-  const index = cutPoint(inSponsor, edge);
+  const index = cutPoint(inSponsor, edge, limits.keepContent);
   if (index < 0) {
     // No phrase here is surely sponsor. For the start, the line-level answer
     // stands: a lead-in reads as ordinary content phrase by phrase, and only
@@ -515,17 +525,18 @@ const IN_RUN = 0.5;
  * it is. Returns the phrase index, or -1 when no phrase qualifies.
  * @param {number[]} inSponsor  one probability per phrase, in transcript order
  * @param {'start'|'end'} edge
+ * @param {number} [keepContent]  the probability a phrase must reach to be skipped
  */
-export function cutPoint(inSponsor, edge) {
+export function cutPoint(inSponsor, edge, keepContent = KEEP_CONTENT) {
   const n = inSponsor.length;
   if (edge === 'start') {
     for (let i = 0; i < n; i++) {
-      if (inSponsor[i] >= KEEP_CONTENT && (i === n - 1 || inSponsor[i + 1] >= IN_RUN)) return i;
+      if (inSponsor[i] >= keepContent && (i === n - 1 || inSponsor[i + 1] >= IN_RUN)) return i;
     }
     return -1;
   }
   for (let i = n - 1; i >= 0; i--) {
-    if (inSponsor[i] >= KEEP_CONTENT && (i === 0 || inSponsor[i - 1] >= IN_RUN)) return i;
+    if (inSponsor[i] >= keepContent && (i === 0 || inSponsor[i - 1] >= IN_RUN)) return i;
   }
   return -1;
 }

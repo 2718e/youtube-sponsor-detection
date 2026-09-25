@@ -53,6 +53,9 @@ const wav = (() => {
 const userDataDir = await mkdtemp(path.join(tmpdir(), 'sponsor-skip-'));
 const context = await chromium.launchPersistentContext(userDataDir, {
   headless: true,
+  // Playwright's default headless Chromium (chrome-headless-shell) cannot load
+  // extensions; the `chromium` channel is the full browser in new headless mode.
+  channel: process.env.CHROME ? undefined : 'chromium',
   executablePath: process.env.CHROME || undefined,
   args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--headless=new', '--autoplay-policy=no-user-gesture-required']
 });
@@ -80,7 +83,7 @@ let worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('service
 const errors = [];
 context.on('weberror', (e) => errors.push(String(e.error)));
 
-// Seed a key and a ready-made Jev result so no live call is needed. Extension
+// Seed a key and a ready-made model result so no live call is needed. Extension
 // pages have the chrome.* APIs; the popup is a handy one to evaluate in.
 const extensionId = new URL(worker.url()).host;
 const popup = await context.newPage();
@@ -89,7 +92,7 @@ const seconds = (i) => fixture.cues[i].startMs / 1000;
 await popup.evaluate(
   async ({ videoId, start, end }) => {
     await chrome.storage.local.set({
-      settings: { apiKey: 'apikey_test', autoSkip: true, threshold: 0.7, model: 'jev-latest', apiBase: 'https://api.typesafe.ai', pricePerMillionInput: 0.042 },
+      settings: { apiKey: 'apikey_test', autoSkip: true, threshold: 0.7, model: 'jev-latest', modelUrl: 'https://api.typesafe.ai', pricePerMillionInput: 0.042 },
       results: {
         [videoId]: {
           videoId, title: 'Demo video', at: Date.now(), elapsedMs: 1234, requests: 3,
@@ -151,89 +154,9 @@ await page.waitForFunction(() => /1 reads/.test(document.querySelector('#sponsor
 await popup.evaluate(async () => chrome.storage.local.set({ results: {} }));
 await page.goto(`https://www.youtube.com/watch?v=${VIDEO_ID}`);
 await page.waitForSelector('#sponsor-skip-panel .ss-status', { timeout: 15000 });
-await page.waitForFunction(() => !/asking Jev/.test(document.querySelector('#sponsor-skip-panel .ss-status').textContent), null, { timeout: 30000 });
+await page.waitForFunction(() => !/Reading the transcript/.test(document.querySelector('#sponsor-skip-panel .ss-status').textContent), null, { timeout: 30000 });
 const outcome = await page.textContent('#sponsor-skip-panel .ss-status');
 console.log('uncached outcome:', outcome);
-
-// Live mode: the panel's Start button captures the element's audio and the
-// worker gets chunks. The speech socket itself cannot be reached from here;
-// what is checked is that the capture attaches without page errors and that
-// audio flows to the worker.
-await popup.evaluate(async () => {
-  const { settings } = await chrome.storage.local.get('settings');
-  await chrome.storage.local.set({ settings: { ...settings, mode: 'live', deepgramKey: 'dg_test' } });
-});
-await page.goto(`https://www.youtube.com/watch?v=${VIDEO_ID}`);
-await page.waitForSelector('#sponsor-skip-panel .ss-body', { timeout: 15000 });
-// Listening starts on its own once the video plays.
-await page.evaluate(async () => { const v = document.querySelector('video'); v.muted = true; await v.play().catch(() => {}); });
-await page.click('#sponsor-skip-panel .ss-log-toggle');
-await page.waitForFunction(() => /Capturing the video element/.test(document.querySelector('#sponsor-skip-panel .ss-log-list')?.textContent ?? ''), null, { timeout: 15000 })
-  .catch(async (e) => { console.log('live log:', await page.textContent('#sponsor-skip-panel .ss-body')); throw e; });
-await page.waitForFunction(() => document.querySelector('#sponsor-skip-panel .ss-controls')?.textContent.includes('Stop'), null, { timeout: 5000 });
-const liveLog = await page.textContent('#sponsor-skip-panel .ss-log-list');
-console.log('live log:', liveLog.replace(/\s+/g, ' ').slice(0, 300));
-const heardSeconds = await popup.evaluate(async () => {
-  await new Promise((r) => setTimeout(r, 11000));
-  const { stats } = await chrome.storage.local.get('stats');
-  return stats?.liveSeconds ?? 0;
-});
-console.log('audio relayed to the worker (s):', heardSeconds);
-assert.ok(heardSeconds > 5, `expected ~10 s of audio to reach the offscreen document, got ${heardSeconds}`);
-// Stop is an opt-out for this video: the button comes back and play does not restart it.
-await page.click('#sponsor-skip-panel .ss-actions .ss-quiet');
-await page.waitForSelector('#sponsor-skip-panel .ss-listen', { timeout: 5000 });
-await page.evaluate(async () => { const v = document.querySelector('video'); v.pause(); await v.play().catch(() => {}); });
-await new Promise((r) => setTimeout(r, 1500));
-assert.match(await page.textContent('#sponsor-skip-panel .ss-audio-label'), /Audio off for this video/);
-// Smart mode: the transcript's cached read (1:2x – 2:5x) decides when the
-// audio runs. Early in the video it stays off; near the read it comes on.
-await popup.evaluate(
-  async ({ videoId, start, end }) => {
-    const { settings } = await chrome.storage.local.get('settings');
-    await chrome.storage.local.set({
-      settings: { ...settings, mode: 'smart' },
-      results: {
-        [videoId]: {
-          videoId, title: 'Demo video', at: Date.now(), elapsedMs: 1234, requests: 3,
-          usage: { input_tokens: 2400, output_tokens: 36 }, cost: 2400 * 0.042 / 1e6,
-          result: { status: 'found', confidence: 0.94, segments: [{ confidence: 0.94, start: { seconds: start, text: 'x', probability: 0.9 }, end: { seconds: end, text: 'y', probability: 0.9 } }] }
-        }
-      }
-    });
-  },
-  { videoId: VIDEO_ID, start: seconds(14), end: seconds(27) }
-);
-await page.goto(`https://www.youtube.com/watch?v=${VIDEO_ID}`);
-await page.waitForSelector('#sponsor-skip-panel .ss-segment', { timeout: 15000 });
-await page.evaluate(async () => { const v = document.querySelector('video'); v.muted = true; v.currentTime = 10; await v.play().catch(() => {}); });
-await new Promise((r) => setTimeout(r, 2500));
-let smartStatus = await page.textContent('#sponsor-skip-panel .ss-body');
-assert.match(smartStatus, /Audio off until near a read/, smartStatus);
-assert.doesNotMatch(await page.textContent('#sponsor-skip-panel .ss-actions'), /Stop/, 'audio must not run far from the read');
-await page.click('#sponsor-skip-panel .ss-log-toggle');
-await page.evaluate((t) => { document.querySelector('video').currentTime = t; }, seconds(14) - 10);
-await page.waitForFunction(() => /Capturing the video element/.test(document.querySelector('#sponsor-skip-panel .ss-log-list')?.textContent ?? ''), null, { timeout: 10000 })
-  .catch(async (e) => { console.log('smart body:', await page.textContent('#sponsor-skip-panel .ss-body')); throw e; });
-smartStatus = await page.textContent('#sponsor-skip-panel .ss-actions');
-assert.match(smartStatus, /Stop/, smartStatus);
-// Layout: the panel keeps its height while the audio state changes.
-const heights = await page.evaluate(() => {
-  const panel = document.querySelector('#sponsor-skip-panel');
-  return { body: panel.getBoundingClientRect().height, audio: panel.querySelector('.ss-audio').getBoundingClientRect().height };
-});
-console.log('panel heights:', heights);
-if (process.env.SHOT_SMART) {
-  const box = await (await page.$('#sponsor-skip-panel')).boundingBox();
-  await page.screenshot({ path: process.env.SHOT_SMART, clip: { x: box.x - 8, y: box.y - 8, width: box.width + 16, height: box.height + 16 } });
-}
-assert.equal(Math.round(heights.audio), 44);
-console.log('smart mode: audio came on near the read');
-
-await popup.evaluate(async () => {
-  const { settings } = await chrome.storage.local.get('settings');
-  await chrome.storage.local.set({ settings: { ...settings, mode: 'transcript' } });
-});
 
 // Popup renders stats.
 await popup.reload();
@@ -241,6 +164,8 @@ await popup.waitForSelector('#stats tr');
 const rows = await popup.$$eval('#stats tr', (trs) => trs.map((t) => t.textContent));
 assert.ok(rows.some((r) => /Reads skipped1/.test(r)), rows.join('\n'));
 assert.ok(rows.some((r) => /Time saved/.test(r)));
+const pill = await popup.textContent('#statusPill');
+assert.match(pill, /hosted model|needs API key|provider error/, pill);
 
 await context.close();
 if (errors.length) {

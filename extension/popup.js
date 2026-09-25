@@ -4,61 +4,60 @@ function send(message) {
   return new Promise((resolve) => chrome.runtime.sendMessage(message, resolve));
 }
 
-const MODE_HINTS = {
-  smart: 'Needs both keys. Skips a sponsor read to its end once the audio confirms what the captions found, so nothing else is cut. With no captions it listens instead. With no audio it skips from the captions alone.',
-  transcript: 'Needs only the TypeSafe key. Skips each sponsor read found in the captions, ending at the last phrase Jev is sure about.',
-  live: 'Needs both keys. About the first 10 seconds of each sponsor read play before the first jump. Listening costs speech minutes for the whole video.'
-};
+let provider = null;
 
 async function load() {
   const r = await send({ type: 'get-state' });
   if (!r?.ok) return;
-  const { settings, stats, cachedVideos } = r;
+  const { settings, stats, cachedVideos, protocols, engine } = r;
+  provider = r.provider;
 
-  // Keys
-  keyState($('keyState'), settings.apiKey, 'TypeSafe');
-  keyState($('deepgramKeyState'), settings.deepgramKey, 'Deepgram');
-
-  // Mode
-  const mode = settings.mode ?? 'transcript';
-  for (const input of document.querySelectorAll('input[name="mode"]')) input.checked = input.value === mode;
-  $('modeHint').textContent = MODE_HINTS[mode] ?? '';
-  $('stepField').hidden = mode === 'transcript';
+  // Provider
+  const select = $('protocol');
+  select.replaceChildren(
+    ...(protocols ?? []).map((p) => {
+      const option = document.createElement('option');
+      option.value = p.protocol;
+      option.textContent = p.label;
+      option.dataset.url = p.url;
+      option.dataset.model = p.model;
+      return option;
+    })
+  );
+  select.value = settings.protocol;
+  $('modelUrl').value = settings.modelUrl;
+  $('model').value = settings.model;
+  keyState($('keyState'), settings.apiKey);
+  providerState();
 
   // Skipping
   $('autoSkip').checked = settings.autoSkip;
   $('threshold').value = settings.threshold;
   $('thresholdOut').textContent = `${Math.round(settings.threshold * 100)}%`;
-  $('liveSkipSeconds').value = settings.liveSkipSeconds ?? 10;
 
   // Advanced
-  $('model').value = settings.model;
   $('price').value = settings.pricePerMillionInput;
-  $('sttPrice').value = settings.sttPricePerMinute ?? 0;
+  $('engineFound').value = engine.found;
+  $('engineMaybe').value = engine.maybe;
+  $('engineKeep').value = engine.keepContent;
 
   // Usage
-  const totalCost = (stats.estimatedCost ?? 0) + (stats.estimatedSttCost ?? 0);
-  const saved = (stats.secondsSkipped ?? 0) + (stats.liveSecondsSkipped ?? 0);
+  const totalCost = stats.estimatedCost ?? 0;
   tiles([
-    [stamp(saved), 'time saved'],
-    [String((stats.skips ?? 0) + (stats.liveSkips ?? 0)), 'skips'],
+    [stamp(stats.secondsSkipped ?? 0), 'time saved'],
+    [String(stats.skips ?? 0), 'skips'],
     [`$${totalCost.toFixed(totalCost < 0.01 ? 4 : 2)}`, 'estimated spend']
   ]);
   const rows = [
     ['Videos analysed', stats.videosAnalyzed],
     ['Sponsor reads found', stats.sponsorsFound],
-    ['Jev requests', stats.requests],
+    ['Model requests', stats.requests],
     ['Input tokens', stats.inputTokens.toLocaleString()],
-    ['Output tokens (free)', stats.outputTokens.toLocaleString()],
-    ['Jev cost (estimated)', `$${stats.estimatedCost.toFixed(5)}`],
+    ['Output tokens', stats.outputTokens.toLocaleString()],
+    ['Estimated cost', `$${(stats.estimatedCost ?? 0).toFixed(5)}`],
     ['Reads skipped', stats.skips],
     ['Time saved', stamp(stats.secondsSkipped)],
-    ['Cached videos', cachedVideos],
-    ['Audio listened to', stamp(stats.liveSeconds)],
-    ['Speech cost (estimated)', `$${(stats.estimatedSttCost ?? 0).toFixed(4)}`],
-    ['Audio checks with Jev', stats.liveChecks],
-    ['Jumps by ear', stats.liveSkips],
-    ['Time saved by ear', stamp(stats.liveSecondsSkipped)]
+    ['Cached videos', cachedVideos]
   ];
   $('stats').replaceChildren(
     ...rows.map(([k, v]) => {
@@ -72,13 +71,34 @@ async function load() {
     })
   );
 
-  await showStatus(settings);
+  pill();
 }
 
-function keyState(node, key, name) {
+function keyState(node, key) {
   node.textContent = key ? `saved …${key.slice(-4)}` : 'not set';
   node.className = `key-state ${key ? 'ok' : 'missing'}`;
-  node.title = key ? `${name} key saved in this browser` : `Paste your ${name} key below`;
+  node.title = key ? 'TypeSafe key saved in this browser' : 'Paste your TypeSafe key below';
+}
+
+/** The pill top right, and the line under the provider fields. */
+function pill() {
+  const el = $('statusPill');
+  const out = $('providerState');
+  if (provider?.error) {
+    el.textContent = 'provider error';
+    el.className = 'pill bad';
+    out.textContent = provider.error;
+    return;
+  }
+  if (!provider) return;
+  el.className = `pill ${provider.isLocal ? 'on' : ''}`;
+  if (!provider.hasKey) {
+    el.textContent = 'needs API key';
+    el.className = 'pill bad';
+  } else {
+    el.textContent = provider.isLocal ? 'local model' : 'hosted model';
+  }
+  out.textContent = `${provider.label} · ${provider.endpoint}${provider.model ? ` · ${provider.model}` : ''}`;
 }
 
 function tiles(items) {
@@ -96,52 +116,68 @@ function tiles(items) {
   );
 }
 
-/** The pill top right and the line under Advanced. */
-async function showStatus(settings, note) {
-  const r = await send({ type: 'live-state' });
-  const live = r?.live ?? { active: false };
-  const mode = settings.mode ?? 'transcript';
-  const pill = $('statusPill');
-  const needsDeepgram = mode !== 'transcript' && !settings.deepgramKey;
-
-  if (!settings.apiKey) {
-    pill.textContent = 'needs TypeSafe key';
-    pill.className = 'pill bad';
-  } else if (needsDeepgram) {
-    pill.textContent = 'needs Deepgram key';
-    pill.className = 'pill bad';
-  } else if (live.active) {
-    pill.textContent = live.state === 'listening' ? 'listening' : 'connecting…';
-    pill.className = `pill ${live.state === 'listening' ? 'on' : 'busy'}`;
-  } else if (live.state === 'error' && live.error) {
-    pill.textContent = 'listening stopped';
-    pill.className = 'pill bad';
-    pill.title = live.error;
-  } else {
-    pill.textContent = { smart: 'smart mode', transcript: 'transcript mode', live: 'listen mode' }[mode] ?? mode;
-    pill.className = 'pill';
+/** The origin a URL needs permission for. Match patterns have no port, so any
+ *  port on that host is covered. */
+function originPattern(raw) {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return `${url.protocol}//${url.hostname}/*`;
+  } catch {
+    return null;
   }
+}
 
-  const out = $('liveState');
-  const toggle = $('liveToggle');
-  toggle.hidden = mode === 'transcript';
-  toggle.textContent = live.active ? 'Stop listening' : 'Start listening in this tab';
-  if (note) out.textContent = note;
-  else if (mode === 'transcript') out.textContent = '';
-  else if (live.active) out.textContent = `Listening in "${live.title || 'the video tab'}".`;
-  else if (live.state === 'error' && live.error) out.textContent = `Listening stopped: ${live.error}`;
-  else out.textContent = 'Listening starts on its own when a video plays. Use this button to start it now.';
+/** Ask for access to the configured host, if the browser can grant it. Returns
+ *  false only when the browser explicitly refused. */
+async function requestHost(url) {
+  const pattern = originPattern(url);
+  if (!pattern || !chrome.permissions?.request) return true;
+  try {
+    // Callback-only implementations resolve undefined; that is not a refusal.
+    return (await chrome.permissions.request({ origins: [pattern] })) !== false;
+  } catch {
+    return false;
+  }
 }
 
 // ---- events ---------------------------------------------------------------
 
-$('modes').addEventListener('change', async (e) => {
-  if (e.target.name !== 'mode') return;
-  const mode = e.target.value;
-  const r = await send({ type: 'set-settings', settings: { mode } });
-  if (mode === 'transcript') await send({ type: 'live-stop' });
-  load();
-  if (r?.ok && mode !== 'transcript' && !r.settings.deepgramKey) $('deepgramKey').focus();
+$('protocol').addEventListener('change', (e) => {
+  const option = e.target.selectedOptions[0];
+  if (!option) return;
+  $('modelUrl').value = option.dataset.url ?? '';
+  $('model').value = option.dataset.model ?? '';
+});
+
+$('saveProvider').addEventListener('click', async () => {
+  const modelUrl = $('modelUrl').value.trim();
+  if (!(await requestHost(modelUrl))) {
+    $('providerState').textContent = `The browser would not grant access to ${modelUrl}. The provider was not changed.`;
+    return;
+  }
+  const r = await send({
+    type: 'set-settings',
+    settings: { protocol: $('protocol').value, modelUrl, model: $('model').value.trim() }
+  });
+  if (r?.ok) provider = r.provider;
+  await load();
+});
+
+$('testProvider').addEventListener('click', async () => {
+  const fields = { protocol: $('protocol').value, modelUrl: $('modelUrl').value.trim(), model: $('model').value.trim() };
+  if (!(await requestHost(fields.modelUrl))) {
+    $('providerState').textContent = `The browser would not grant access to ${fields.modelUrl}.`;
+    return;
+  }
+  $('providerState').textContent = 'Asking the model…';
+  const r = await send({ type: 'test-provider', provider: fields });
+  if (r?.ok) {
+    const h = r.health;
+    $('providerState').textContent = `Answered in ${h.ms} ms via ${h.endpoint}${h.model ? ` (${h.model})` : ''}.`;
+  } else {
+    $('providerState').textContent = r?.error ?? 'No answer.';
+  }
 });
 
 $('saveKey').addEventListener('click', async () => {
@@ -151,48 +187,32 @@ $('saveKey').addEventListener('click', async () => {
   $('apiKey').value = '';
   load();
 });
-$('saveDeepgramKey').addEventListener('click', async () => {
-  const deepgramKey = $('deepgramKey').value.trim();
-  if (!deepgramKey) return;
-  await send({ type: 'set-settings', settings: { deepgramKey } });
-  $('deepgramKey').value = '';
-  load();
+$('apiKey').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('saveKey').click();
 });
-for (const id of ['apiKey', 'deepgramKey']) {
-  $(id).addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') $(id === 'apiKey' ? 'saveKey' : 'saveDeepgramKey').click();
-  });
-}
 
 $('autoSkip').addEventListener('change', (e) => send({ type: 'set-settings', settings: { autoSkip: e.target.checked } }));
 $('threshold').addEventListener('input', (e) => {
   $('thresholdOut').textContent = `${Math.round(e.target.value * 100)}%`;
 });
 $('threshold').addEventListener('change', (e) => send({ type: 'set-settings', settings: { threshold: Number(e.target.value) } }));
-$('liveSkipSeconds').addEventListener('change', (e) =>
-  send({ type: 'set-settings', settings: { liveSkipSeconds: Math.max(5, Number(e.target.value) || 10) } }).then(load)
-);
-$('model').addEventListener('change', (e) => send({ type: 'set-settings', settings: { model: e.target.value.trim() || 'jev-latest' } }));
 $('price').addEventListener('change', (e) => send({ type: 'set-settings', settings: { pricePerMillionInput: Number(e.target.value) || 0 } }).then(load));
-$('sttPrice').addEventListener('change', (e) =>
-  send({ type: 'set-settings', settings: { sttPricePerMinute: Number(e.target.value) || 0 } }).then(load)
-);
+
+for (const id of ['engineFound', 'engineMaybe', 'engineKeep']) {
+  $(id).addEventListener('change', async () => {
+    const engine = {
+      found: Number($('engineFound').value),
+      maybe: Number($('engineMaybe').value),
+      keepContent: Number($('engineKeep').value)
+    };
+    await send({ type: 'set-settings', settings: { engine } });
+    load();
+  });
+}
+
+$('resetEngine').addEventListener('click', () => send({ type: 'set-settings', settings: { engine: null } }).then(load));
 $('resetStats').addEventListener('click', () => send({ type: 'reset-stats' }).then(load));
 $('clearCache').addEventListener('click', () => send({ type: 'clear-cache' }).then(load));
-
-$('liveToggle').addEventListener('click', async () => {
-  const r = await send({ type: 'live-state' });
-  if (r?.live?.active) {
-    await send({ type: 'live-stop' });
-    load();
-    return;
-  }
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const started = tab ? await send({ type: 'live-start', tabId: tab.id }) : { ok: false, error: 'No open tab.' };
-  const state = await send({ type: 'get-state' });
-  if (started?.ok) load();
-  else await showStatus(state.settings, `Could not start listening: ${started?.error ?? 'unknown error'}`);
-});
 
 function stamp(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds) || 0));

@@ -1,10 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Sponsor Skip (Jev)",
-  "version": "0.1.0",
-  "description": "Finds the sponsor read in a YouTube video with Jev (TypeSafe) and skips it, from the transcript or by listening live.",
-  "permissions": ["storage", "offscreen"],
-  "host_permissions": ["https://api.typesafe.ai/*"],
+  "name": "Sponsor Skip",
+  "version": "0.2.0",
+  "description": "Finds the sponsor read in a YouTube video with a typed-question model and skips it. Works with hosted Jev or a local Jev-compatible server.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://api.typesafe.ai/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "optional_host_permissions": ["https://*/*"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_popup": "popup.html", "default_title": "Sponsor Skip" },
   "icons": { "128": "icons/icon128.png" },
@@ -21,8 +26,5 @@
       "css": ["panel.css"],
       "run_at": "document_idle"
     }
-  ],
-  "web_accessible_resources": [
-    { "resources": ["lib/*.js", "pcm-worklet.js"], "matches": ["https://www.youtube.com/*"] }
   ]
 }

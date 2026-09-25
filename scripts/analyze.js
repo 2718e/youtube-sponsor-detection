@@ -2,25 +2,27 @@
 // segment with the lines around its boundaries, so the questions can be
 // judged against real videos.
 //
-//   TYPESAFE_API_KEY=... node scripts/analyze.js https://www.youtube.com/watch?v=GIAQF2KtQJw
+//   MODEL_URL=https://api.typesafe.ai MODEL_API_KEY=... node scripts/analyze.js <url>
 //   node scripts/analyze.js --transcript path/to/pasted-transcript.txt
 //
 // Add --json to dump the full result, --verbose to print every scan window.
+// Point MODEL_URL at a local Jev-compatible server to run without a key.
 
 import { readFile } from 'node:fs/promises';
-import { TypeSafeClient } from '@typesafe-ai/sdk';
 
 import { parseVideoId, fetchTranscript, parsePastedTranscript } from '../src/youtube.js';
 import { buildLines, formatTimestamp } from '../src/transcript.js';
 import { findSponsorSegment } from '../src/jev.js';
+import { providerFromEnv } from '../src/providers/index.js';
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
 const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
 const target = args.find((a) => !a.startsWith('--') && a !== opt('--transcript') && a !== opt('--title'));
 
-if (!process.env.TYPESAFE_API_KEY) {
-  console.error('Set TYPESAFE_API_KEY first.');
+const provider = providerFromEnv();
+if (!provider.hasKey) {
+  console.error(`No API key for ${provider.label}. Set MODEL_API_KEY, or point MODEL_URL at a local server.`);
   process.exit(1);
 }
 
@@ -40,11 +42,12 @@ if (opt('--transcript')) {
 const lines = buildLines(cues);
 console.log(`${title}\n${lines.length} lines, ${formatTimestamp(lines.at(-1).end)} long\n`);
 
-const client = new TypeSafeClient({ timeout: 30_000 });
 const started = Date.now();
 const result = await findSponsorSegment(lines, {
-  client,
+  client: provider,
+  model: provider.model,
   title,
+  thresholds: provider.thresholds,
   onProgress: (e) => flag('--verbose') && console.log('  ', JSON.stringify(e))
 });
 

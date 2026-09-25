@@ -30,6 +30,8 @@ const wav = (() => {
 
 const context = await chromium.launchPersistentContext(await mkdtemp(path.join(tmpdir(), 'sponsor-skip-shots-')), {
   headless: true,
+  // The default headless Chromium (chrome-headless-shell) cannot load extensions.
+  channel: process.env.CHROME ? undefined : 'chromium',
   executablePath: process.env.CHROME || undefined,
   deviceScaleFactor: 2,
   args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--headless=new', '--autoplay-policy=no-user-gesture-required']
@@ -57,8 +59,8 @@ await popup.setViewportSize({ width: 392, height: 900 });
 await popup.goto(`chrome-extension://${extensionId}/popup.html`);
 await popup.evaluate(async ({ videoId, start, end }) => {
   await chrome.storage.local.set({
-    settings: { apiKey: 'apikey_demo', deepgramKey: 'dg_demo', mode: 'smart', autoSkip: true, threshold: 0.7, liveSkipSeconds: 10, model: 'jev-latest', apiBase: 'https://api.typesafe.ai', pricePerMillionInput: 0.042 },
-    stats: { videosAnalyzed: 12, sponsorsFound: 15, requests: 51, inputTokens: 148200, outputTokens: 610, estimatedCost: 0.00622, skips: 14, secondsSkipped: 1263, liveSeconds: 1120, estimatedSttCost: 0.0803, liveChecks: 37, liveSkips: 1, liveSecondsSkipped: 20 },
+    settings: { apiKey: 'apikey_demo', autoSkip: true, threshold: 0.7, model: 'jev-latest', modelUrl: 'https://api.typesafe.ai', pricePerMillionInput: 0.042 },
+    stats: { videosAnalyzed: 12, sponsorsFound: 15, requests: 51, inputTokens: 148200, outputTokens: 610, estimatedCost: 0.00622, skips: 14, secondsSkipped: 1263 },
     results: { [videoId]: {
       videoId, title: 'Demo video', at: Date.now(), elapsedMs: 1830, requests: 4,
       usage: { input_tokens: 3313, output_tokens: 48 }, cost: 3313 * 0.042 / 1e6,

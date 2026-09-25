@@ -1,10 +1,11 @@
-// A local stand-in for api.typesafe.ai, so the app can be driven end to end
-// without a key. Answers with the same shape Jev does, using keyword spotting.
+// A local stand-in for a Jev-compatible server, so the app can be driven end
+// to end without a key or a model. Answers with the same shape Jev does, using
+// keyword spotting.
 //
 //   node test/mock-typesafe-api.js &
-//   TYPESAFE_API_KEY=local TYPESAFE_BASE_URL=http://127.0.0.1:4010 npm start
+//   MODEL_URL=http://127.0.0.1:4010 npm start
 //
-// Real answers need a real key: this only proves the plumbing, not the model.
+// Real answers need a real model: this only proves the plumbing, not the model.
 
 import http from 'node:http';
 import { createStubClient } from './stub-client.js';

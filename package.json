@@ -1,25 +1,26 @@
 {
   "name": "sponsor-skip",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Paste a YouTube link, get the timestamp where the sponsor segment starts, found with Jev (TypeSafe System One).",
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
     "test": "node --test test/*.test.js",
-    "build:ext": "cp src/transcript.js src/jev.js src/live.js extension/lib/",
+    "build:ext": "node scripts/build-extension.mjs",
     "test:ext": "node test/extension.e2e.mjs",
     "analyze": "node --env-file-if-exists=.env scripts/analyze.js",
     "eval": "node --env-file-if-exists=.env scripts/eval.js",
     "sample": "node scripts/sponsorblock-sample.js",
     "transcripts": "node scripts/save-transcripts.js",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "local:setup": "bash scripts/setup-local-model.sh",
+    "local:serve": "bash scripts/serve-local-model.sh"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "@typesafe-ai/sdk": "^0.6.0",
     "express": "^5.1.0",
     "youtubei.js": "^18.0.0"
   },

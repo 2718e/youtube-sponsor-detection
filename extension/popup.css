@@ -40,26 +40,17 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: 
 .pill.bad { color: #f3c2c2; border-color: #5c2c2c; }
 .pill.busy { color: var(--accent); border-color: #5c4a1c; }
 
-/* Modes */
-.modes { display: flex; flex-direction: column; gap: 6px; }
-.mode { display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); cursor: pointer; }
-.mode:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.mode input { margin: 3px 0 0; accent-color: var(--accent); }
-.mode-body { display: flex; flex-direction: column; gap: 2px; }
-.mode-name { font-weight: 600; }
-.mode-name em { font-style: normal; font-weight: 500; font-size: 11px; color: var(--accent); margin-left: 6px; }
-.mode-desc { color: var(--muted); font-size: 12px; }
-
-/* Keys */
+/* Provider and keys */
 .key { margin-top: 8px; }
 .key-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; margin-bottom: 4px; }
+.key-head em { font-style: normal; color: var(--muted); }
 .key-state { color: var(--muted); }
 .key-state.ok { color: var(--good); }
 .key-state.missing { color: var(--accent); }
 
 .row { display: flex; align-items: center; gap: 8px; }
 .row.buttons { justify-content: space-between; margin-top: 10px; }
-input[type="text"], input[type="password"], input[type="number"] {
+select, input[type="text"], input[type="password"], input[type="number"] {
   flex: 1;
   min-width: 0;
   background: var(--panel);
@@ -75,9 +66,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .switch { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; cursor: pointer; }
 .field { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
 .field.inline { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
-.field.inline input { flex: 0 0 110px; }
-.unit { display: flex; align-items: center; gap: 6px; }
-.unit input { flex: 0 0 64px; }
+.field.inline select, .field.inline input { flex: 0 0 150px; }
 
 button {
   background: var(--accent);
