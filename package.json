@@ -5,26 +5,36 @@
   "type": "module",
   "description": "Paste a YouTube link, get the timestamp where the sponsor segment starts, found with Jev (TypeSafe System One).",
   "scripts": {
-    "start": "node --env-file-if-exists=.env server.js",
-    "test": "node --test test/*.test.js",
-    "build:ext": "node scripts/build-extension.mjs",
-    "test:ext": "node test/extension.e2e.mjs",
-    "analyze": "node --env-file-if-exists=.env scripts/analyze.js",
-    "eval": "node --env-file-if-exists=.env scripts/eval.js",
-    "sample": "node scripts/sponsorblock-sample.js",
-    "transcripts": "node scripts/save-transcripts.js",
-    "screenshots": "node scripts/screenshots.mjs",
+    "start": "node --env-file-if-exists=.env --import tsx server.ts",
+    "prestart": "npm run build:web",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:ext": "npm run build:ext && node --import tsx test/extension.e2e.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run build:web && npm run build:ext",
+    "build:ext": "tsx scripts/build-extension.ts",
+    "build:web": "tsx scripts/build-web.ts",
+    "analyze": "node --env-file-if-exists=.env --import tsx scripts/analyze.ts",
+    "eval": "node --env-file-if-exists=.env --import tsx scripts/eval.ts",
+    "sample": "node --import tsx scripts/sponsorblock-sample.ts",
+    "transcripts": "node --import tsx scripts/save-transcripts.ts",
+    "screenshots": "npm run build:ext && node --import tsx scripts/screenshots.ts",
     "local:setup": "bash scripts/setup-local-model.sh",
     "local:serve": "bash scripts/serve-local-model.sh"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.9"
   },
   "dependencies": {
     "express": "^5.1.0",
     "youtubei.js": "^18.0.0"
   },
   "devDependencies": {
-    "playwright": "^1.63.0"
+    "@types/chrome": "^0.3.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.3",
+    "esbuild": "^0.28.2",
+    "playwright": "^1.63.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
   }
 }
