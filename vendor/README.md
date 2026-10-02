@@ -11,7 +11,7 @@ same typed questions Jev does, over the same wire protocol:
 POST http://127.0.0.1:8009/v1/systemone
 ```
 
-Because the protocol is the same, nothing in `src/jev.ts`, the extension or the
+Because the protocol is the same, nothing in `src/decisionModel/`, the extension or the
 web app changes when you switch between hosted Jev and a local Kev — only
 `MODEL_URL` (and, for the extension, the provider fields in the popup).
 

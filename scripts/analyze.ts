@@ -12,7 +12,7 @@ import { readFile } from 'node:fs/promises';
 
 import { parseVideoId, fetchTranscript, parsePastedTranscript } from '../src/youtube.js';
 import { buildLines, formatTimestamp, type Cue } from '../src/transcript.js';
-import { findSponsorSegment } from '../src/jev.js';
+import { findSponsorSegment } from '../src/decisionModel/findSponsorSegment.js';
 import { providerFromEnv } from '../src/providers/index.js';
 
 const args = process.argv.slice(2);

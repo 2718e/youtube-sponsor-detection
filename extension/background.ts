@@ -4,11 +4,13 @@
 //
 // Which model answers is configuration, not code: `createProvider` turns the
 // settings into something with a `systemOne(request)`, and the pipeline in
-// ../src/jev.ts only ever calls that. Point `modelUrl` at a local
+// ../src/decisionModel/ only ever calls that. Point `modelUrl` at a local
 // Jev-compatible server or at api.typesafe.ai and nothing else changes.
 
 import { buildLines, type Cue } from '../src/transcript.js';
-import { DEFAULT_THRESHOLDS, findSponsorSegment, type Thresholds, type SponsorResult } from '../src/jev.js';
+import { findSponsorSegment } from '../src/decisionModel/findSponsorSegment.js';
+import { DEFAULT_THRESHOLDS, type Thresholds } from '../src/decisionModel/thresholds.js';
+import type { SponsorResult } from '../src/decisionModel/types.js';
 import {
   createProvider,
   PROTOCOL_PRESETS,

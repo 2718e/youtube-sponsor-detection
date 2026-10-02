@@ -20,7 +20,7 @@ import { existsSync } from 'node:fs';
 
 import { fetchTranscript } from '../src/youtube.js';
 import { buildLines, formatTimestamp } from '../src/transcript.js';
-import { findSponsorSegment } from '../src/jev.js';
+import { findSponsorSegment } from '../src/decisionModel/findSponsorSegment.js';
 import { evalVideos, savedTranscript, type EvalVideo } from '../src/eval-videos.js';
 import { providerFromEnv } from '../src/providers/index.js';
 

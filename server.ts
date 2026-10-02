@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 import { parseVideoId, fetchTranscript, parsePastedTranscript, TranscriptUnavailable } from './src/youtube.js';
 import { buildLines, formatTimestamp, type Cue } from './src/transcript.js';
-import { findSponsorSegment, type SponsorResult } from './src/jev.js';
+import { findSponsorSegment } from './src/decisionModel/findSponsorSegment.js';
+import type { SponsorResult } from './src/decisionModel/types.js';
 import { providerFromEnv } from './src/providers/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));

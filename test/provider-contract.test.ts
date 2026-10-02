@@ -2,7 +2,7 @@
 //
 // Every model backend has to turn a canonical typed question into an answer the
 // pipeline can read. This file is that requirement as a test: a provider that
-// passes it can be swapped in without ../src/jev.ts changing, which is the
+// passes it can be swapped in without ../src/decisionModel/ changing, which is the
 // whole point of the layer. Adding a backend means adding a case here.
 
 import { test, before, after } from 'node:test';
@@ -15,7 +15,7 @@ import { assertCanonical, normalizeAnswer, type Questions } from '../src/provide
 import { createSystemOneProvider, TYPESAFE_HOST } from '../src/providers/systemone.js';
 import { createStubClient } from './stub-client.js';
 import { buildLines, type Cue } from '../src/transcript.js';
-import { findSponsorSegment } from '../src/jev.js';
+import { findSponsorSegment } from '../src/decisionModel/findSponsorSegment.js';
 
 const fixture = JSON.parse(await readFile(new URL('../fixtures/demo-transcript.json', import.meta.url), 'utf8')) as {
   title: string;

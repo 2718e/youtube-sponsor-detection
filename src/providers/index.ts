@@ -3,7 +3,7 @@
 //
 // Adding a model whose interface is only *broadly* Jev's means writing one
 // module, registering it here, and passing the contract test in
-// test/provider-contract.test.ts. Nothing in ../jev.ts or the extension changes:
+// test/provider-contract.test.ts. Nothing in ../decisionModel/ or the extension changes:
 // the pipeline only ever calls `systemOne` and reads `answers`.
 //
 // Configuration is deliberately just data, so the same shape is written by the

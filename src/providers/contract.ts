@@ -1,6 +1,6 @@
 // The contract every model provider must satisfy.
 //
-// The pipeline in ../jev.ts asks typed questions and reads probabilities back.
+// The pipeline in ../decisionModel/ asks typed questions and reads probabilities back.
 // That request/answer shape is the project's own language: nothing below this
 // file knows which server, model or protocol answered. A provider's only job is
 // to turn a canonical request into whatever its wire format is, and turn the

@@ -10,7 +10,7 @@
 // is normalized against the questions that were asked.
 
 import { normalizeAnswer, type CanonicalRequest, type ProviderAnswer } from './contract.js';
-import { DEFAULT_THRESHOLDS, type Thresholds } from '../jev.js';
+import { DEFAULT_THRESHOLDS, type Thresholds } from '../decisionModel/thresholds.js';
 
 /** Where a local Jev-compatible server usually listens. */
 export const DEFAULT_URL = 'http://localhost:8000';

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import { buildLines, windowLines, estimateTokens, formatTimestamp, WINDOW_LINES, type Cue, type Line } from '../src/transcript.js';
-import { findSponsorSegment, scanQuestions, anchorQuestions, startQuestions, type PipelineClient } from '../src/jev.js';
+import { findSponsorSegment } from '../src/decisionModel/findSponsorSegment.js';
+import { scanQuestions, anchorQuestions, startQuestions } from '../src/decisionModel/prompts.js';
+import type { PipelineClient } from '../src/decisionModel/types.js';
 import { parseVideoId, parsePastedTranscript } from '../src/youtube.js';
 import type { Answer, CanonicalRequest } from '../src/providers/contract.js';
 import { createStubClient } from './stub-client.js';
