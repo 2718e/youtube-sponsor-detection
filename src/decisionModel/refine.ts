@@ -6,13 +6,19 @@ import { RUNS_PAST_EXCERPT, anchorQuestions, startQuestions } from './prompts.js
 import { bestLabel, looksLikeSponsor } from './scan.js';
 import { cut } from './cut.js';
 import { type Thresholds } from './thresholds.js';
-import { type Ask, type Report, type Scan, type SponsorSegment } from './types.js';
+import {
+  type Ask,
+  type CutOptions,
+  type Report,
+  type Scan,
+  type SponsorSegment
+} from './types.js';
 
 /** Lines of context kept around the anchor in the refine pass. A lead-in
  *  story can run three or four minutes before the sponsor is even named, so
  *  the reach backwards is generous. */
 const REFINE_BEFORE = 20;
-const REFINE_AFTER = 10;
+const REFINE_AFTER = 15;
 
 /** Lines masked after a start when the refine pass could not find the end. */
 const BLIND_MASK_LINES = 10;
@@ -30,7 +36,8 @@ export async function refine(
   ask: Ask,
   report: Report,
   title: string,
-  limits: Thresholds
+  limits: Thresholds,
+  cutOptions: CutOptions
 ): Promise<SponsorSegment | null> {
   const centre = lines.findIndex((l) => l.id === winner.startLineId);
   const from = Math.max(0, centre - REFINE_BEFORE);
@@ -81,6 +88,7 @@ export async function refine(
 
   const endLine = endPick.id ? byId.get(endPick.id) : undefined;
   const endOk = Boolean(endLine && endRunsOn < endPick.probability && endLine.end > startLine.start);
+  const confidence = Math.min(looksLikeSponsor(winner), presence);
 
   const startIndex = slice.indexOf(startLine);
   const endIndex = endOk ? slice.indexOf(endLine as Line) : Math.min(slice.length - 1, anchorIndex + BLIND_MASK_LINES);
@@ -88,17 +96,23 @@ export async function refine(
 
   // Third request(s): where inside the first and last lines the segment
   // really begins and ends. Both edges are independent, so they run together.
+  // The cut is the most expensive pass in a run, so a caller that would not
+  // skip a segment this unsure does not pay for one.
   report({ stage: 'cut' });
-  let [startCut, endCut] = await Promise.all([
-    cut(lines, startLine, 'start', ask, title, anchorLine, limits),
-    endOk ? cut(lines, endLine as Line, 'end', ask, title, anchorLine, limits) : null
-  ]);
+  let [startCut, endCut] = cutOptions.cut === 'always' || confidence >= cutOptions.skipThreshold
+    ? await Promise.all([
+        cut(lines, startLine, 'start', ask, title, anchorLine, limits, cutOptions.boundaryStrategy, cutOptions.searchStrategy, report),
+        endOk
+          ? cut(lines, endLine as Line, 'end', ask, title, anchorLine, limits, cutOptions.boundaryStrategy, cutOptions.searchStrategy, report)
+          : null
+      ])
+    : [null, null];
   // A read of a few words can end up with its end cut before its start (no
   // phrase was surely sponsor); the line-level end stands then.
   if (endCut && endCut.seconds <= (startCut?.seconds ?? startLine.start)) endCut = null;
 
   return {
-    confidence: Math.min(looksLikeSponsor(winner), presence),
+    confidence,
     scanPresence: winner.presence,
     refinePresence: presence,
     start: {

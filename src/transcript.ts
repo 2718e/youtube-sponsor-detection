@@ -8,7 +8,7 @@ const LINE_MIN_CHARS = 70;
 const LINE_MAX_SECONDS = 8;
 
 /** Lines per scan window. Keeps state small and the choice list answerable. */
-export const WINDOW_LINES = 80;
+export const WINDOW_LINES = 60;
 /** Lines shared between neighbouring windows, so a sponsor read that straddles
  *  a boundary is still fully visible inside one of them. */
 export const WINDOW_OVERLAP = 6;

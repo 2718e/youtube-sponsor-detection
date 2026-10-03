@@ -6,6 +6,8 @@
 //   node scripts/analyze.ts --transcript path/to/pasted-transcript.txt
 //
 // Add --json to dump the full result, --verbose to print every scan window.
+// Add --census to cut by asking about every phrase, --cut-always to cut reads
+// that are too unsure to skip: both are for comparing prompts.
 // Point MODEL_URL at a local Jev-compatible server to run without a key.
 
 import { readFile } from 'node:fs/promises';
@@ -49,6 +51,8 @@ const result = await findSponsorSegment(lines, {
   model: provider.model,
   title,
   thresholds: provider.thresholds,
+  boundaryStrategy: flag('--census') ? 'per-phrase' : 'search',
+  cut: flag('--cut-always') ? 'always' : 'skippable',
   onProgress: (e) => {
     if (flag('--verbose')) console.log('  ', JSON.stringify(e));
   }

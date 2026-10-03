@@ -32,6 +32,7 @@ import { looksLikeSponsor, scanWindow } from './scan.js';
 import { refine } from './refine.js';
 import {
   type Ask,
+  type CutOptions,
   type FindOptions,
   type Report,
   type Scan,
@@ -58,6 +59,14 @@ export async function findSponsorSegment(lines: Line[], opts: FindOptions): Prom
   const model = opts.model;
   const title = opts.title ?? 'unknown';
   const limits: Thresholds = { ...DEFAULT_THRESHOLDS, ...(opts.thresholds ?? {}) };
+  const cutOptions: CutOptions = {
+    cut: opts.cut ?? 'skippable',
+    // A caller that names no skip threshold is the pipeline's own: the band a
+    // segment has to reach to count as found.
+    skipThreshold: opts.skipThreshold ?? limits.found,
+    boundaryStrategy: opts.boundaryStrategy ?? 'search',
+    searchStrategy: opts.searchStrategy ?? 'binary'
+  };
   const report: Report = opts.onProgress ?? (() => {});
 
   if (!lines.length) {
@@ -108,7 +117,7 @@ export async function findSponsorSegment(lines: Line[], opts: FindOptions): Prom
     if (!candidates.length) break;
     const winner = candidates.reduce((a, b) => (looksLikeSponsor(b) > looksLikeSponsor(a) ? b : a));
 
-    const segment = await refine(winner, lines, taken, ask, report, title, limits);
+    const segment = await refine(winner, lines, taken, ask, report, title, limits, cutOptions);
     if (segment) {
       segments.push(segment);
       for (const id of segment.lineIds) taken.add(id);
