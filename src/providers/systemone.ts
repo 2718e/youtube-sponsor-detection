@@ -97,8 +97,8 @@ export async function postSystemOne(
   if (connection.apiKey) headers.authorization = `Bearer ${connection.apiKey}`;
 
   let lastError: Error | undefined;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt) await new Promise((r) => setTimeout(r, 2500 * 2 ** attempt));
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 1500 * 2 ** attempt));
     let response: Response;
     try {
       response = await doFetch(connection.endpoint, {
