@@ -92,10 +92,42 @@ export interface SponsorResult {
 export type Ask = (state: Record<string, unknown>, questions: Questions) => Promise<ProviderAnswer>;
 export type Report = (event: ProgressEvent) => void;
 
+/** How the cut pass finds the edge inside the boundary lines. */
+export type BoundaryStrategy = 'per-phrase' | 'search';
+
+/** How the search narrows a span: two groups a round, or three. */
+export type SearchStrategy = 'binary' | 'span';
+
+/** The cut pass's settings, resolved once per run. */
+export interface CutOptions {
+  /** Ask the cut pass for every segment, or only for the ones that could be skipped. */
+  cut: 'skippable' | 'always';
+  /** Confidence at which the caller would skip a segment. */
+  skipThreshold: number;
+  boundaryStrategy: BoundaryStrategy;
+  searchStrategy: SearchStrategy;
+}
+
+/** One step of a search, for the progress log. */
+export interface SearchCall {
+  stage: string;
+  from: number;
+  to: number;
+  picked: number;
+  probability: number;
+}
+
 export interface FindOptions {
   client: PipelineClient;
   model?: string;
   title?: string;
   thresholds?: Partial<Thresholds>;
+  /** Confidence a segment needs before it is cut, as the caller skips it. */
+  skipThreshold?: number;
+  /** Ask the cut pass for every segment, or only for the ones that could be skipped. */
+  cut?: 'skippable' | 'always';
+  /** Which cut pass to use; 'search' costs about log(n) questions instead of n. */
+  boundaryStrategy?: BoundaryStrategy;
+  searchStrategy?: SearchStrategy;
   onProgress?: Report;
 }

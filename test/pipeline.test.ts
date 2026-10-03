@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-import { buildLines, windowLines, estimateTokens, formatTimestamp, WINDOW_LINES, type Cue, type Line } from '../src/transcript.js';
+import { buildLines, buildPhrases, windowLines, estimateTokens, formatTimestamp, WINDOW_LINES, type Cue, type Line } from '../src/transcript.js';
 import { findSponsorSegment } from '../src/decisionModel/findSponsorSegment.js';
+import { searchCost } from '../src/decisionModel/search.js';
 import { scanQuestions, anchorQuestions, startQuestions } from '../src/decisionModel/prompts.js';
 import type { PipelineClient } from '../src/decisionModel/types.js';
 import { parseVideoId, parsePastedTranscript } from '../src/youtube.js';
@@ -15,6 +16,20 @@ const fixture = JSON.parse(await readFile(new URL('../fixtures/demo-transcript.j
   cues: Cue[];
 };
 const SPONSOR_STARTS_NEAR = 89; // "who is making today's video possible"
+
+/** How many requests the cut pass spent searching for a boundary. */
+function searches(requests: CanonicalRequest[]): number {
+  return requests.filter((r) => r.questions.search_group).length;
+}
+
+/** Requests one edge costs: a round per halving of `phrases`, then the confirmation. */
+const edgeCost = (phrases: number) => Math.ceil(Math.log2(phrases)) + 1;
+
+/** Requests one edge of a cut costs: a round per halving of the span, then the confirmation. */
+const EDGE_SEARCHES = 4; // the span is 8 phrases: 8 -> 4 -> 2 -> 1, then the confirmation
+
+/** Everything the demo transcript costs: one scan, anchor, trace back, two cuts, one rescan. */
+const SEARCH_PIPELINE_REQUESTS = 14;
 
 test('video ids come out of every link shape we accept', () => {
   assert.equal(parseVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=90s'), 'dQw4w9WgXcQ');
@@ -79,7 +94,10 @@ test('finds the sponsor read in the demo transcript', async () => {
   assert.ok(result.end && result.end.seconds > result.start!.seconds, 'the end comes after the start');
   assert.ok(result.confidence > 0.7);
   assert.equal(result.segments.length, 1);
-  assert.equal(client.requests.length, 6, 'scan, anchor, trace back, two cuts, then a clean rescan of the window');
+  // scan, anchor, trace back, a search per edge, then a clean rescan.
+  assert.equal(searches(client.requests), 2 * EDGE_SEARCHES, 'a search per edge, not a question per phrase');
+  assert.equal(client.requests.length, 14, 'scan, anchor, trace back, two cuts, and a clean rescan');
+  assert.equal(client.requests.length, SEARCH_PIPELINE_REQUESTS, 'the demo transcript is the baseline every other count is read against');
 });
 
 test('a long video is scanned window by window, then refined once', async () => {
@@ -96,7 +114,8 @@ test('a long video is scanned window by window, then refined once', async () => 
 
   const scans = windowLines(lines).length;
   assert.ok(scans > 1, 'this transcript really is multi-window');
-  assert.equal(client.requests.length, scans + 5, 'scans, anchor, trace back, two cuts, one clean rescan');
+  assert.equal(searches(client.requests), 2 * EDGE_SEARCHES, 'a search per edge, not a question per phrase');
+  assert.equal(client.requests.length, scans + SEARCH_PIPELINE_REQUESTS - 1, 'a scan per window, then the demo transcript\'s own tail work');
   assert.equal(result.status, 'found');
   assert.ok(result.start!.seconds > offset / 1000, 'the sponsor read is found in the tail, not the filler');
   assert.ok(result.windows.every((w) => w.estimatedStateTokens < 25_000), 'each excerpt stays well inside the 32k state limit');
@@ -139,8 +158,12 @@ test('two sponsor reads in one window are both found, in order', async () => {
   assert.ok(second.start.seconds > 250 && second.start.seconds < 300, `second at ${second.start.seconds}s`);
   assert.ok(first.end!.seconds < second.start.seconds, 'segments do not overlap');
   assert.ok(second.end, 'the second read has an end too');
-  // scan, (anchor, trace, two cuts, rescan) x2, the last rescan clean
-  assert.equal(client.requests.length, 11);
+  // scan, then (anchor, trace back, two cuts, rescan) per read; the last read
+  // sits at the end of the window, so it is not rescanned.
+  assert.equal(searches(client.requests), 2 * 2 * EDGE_SEARCHES, 'a search per edge of each read');
+  // scan, (anchor, trace back, two cuts, rescan) for the first read, and the
+  // second read sits at the end of the window, so it is not rescanned.
+  assert.equal(client.requests.length, 3 + 16 + 8, 'a refine and a rescan for the first read, a refine for the second');
   assert.equal(result.start!.seconds, first.start.seconds, 'top-level start is the earliest segment');
 });
 
@@ -178,7 +201,9 @@ test('a lead-in anecdote is part of the segment, from its first line', async () 
   assert.ok(Math.abs(seg.anchor.seconds - leadIn.sponsorNamedAtSeconds) < 8, `named at ${seg.anchor.seconds}`);
   assert.ok(seg.anchor.seconds - seg.start.seconds > 30, 'the lead-in runs well before the sponsor is named');
   assert.ok(seg.end && seg.end.seconds > seg.anchor.seconds, 'ends after the offer');
-  assert.ok(seg.end.seconds < buildLines(leadIn.cues).at(-1)!.start, 'the sign-off is not part of the segment');
+  // Captions are contiguous, so the last sponsor line can end exactly where the
+  // sign-off begins: the point is that the sign-off is not inside the segment.
+  assert.ok(seg.end.seconds <= buildLines(leadIn.cues).at(-1)!.start, 'the sign-off is not part of the segment');
 
   // The trace-back request carries the naming line in its state and offers only lines up to it.
   const trace = client.requests.find((r) => r.questions.start_line)!;

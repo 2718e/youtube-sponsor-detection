@@ -69,8 +69,8 @@ test('analyze needs a key, then finds the segment and records stats', async () =
   assert.equal(first.result.status, 'found');
   assert.equal(first.result.segments.length, 1);
   assert.ok(first.result.segments[0].end.seconds > first.result.segments[0].start.seconds);
-  assert.equal(first.requests, 6);
-  assert.equal(calls.length, 6);
+  assert.equal(first.requests, 14);
+  assert.equal(calls.length, 14);
   assert.equal(calls[0].url, 'https://api.typesafe.ai/v1/systemone');
   assert.match(calls[0].headers.authorization, /^Bearer apikey_test$/);
   assert.equal(calls[0].body.model, 'jev-latest');
@@ -79,15 +79,15 @@ test('analyze needs a key, then finds the segment and records stats', async () =
 
   const again = await ask({ type: 'analyze', videoId: 'abc', title: 't', cues: fixture.cues });
   assert.equal(again.cached, true);
-  assert.equal(calls.length, 6, 'a cached video costs nothing');
+  assert.equal(calls.length, 14, 'a cached video costs nothing');
 
   const forced = await ask({ type: 'analyze', videoId: 'abc', title: 't', cues: fixture.cues, force: true });
   assert.equal(forced.cached, false);
-  assert.equal(calls.length, 12);
+  assert.equal(calls.length, 28);
 
   const state = await ask({ type: 'get-state' });
   assert.equal(state.stats.videosAnalyzed, 2);
-  assert.equal(state.stats.requests, 12);
+  assert.equal(state.stats.requests, 28);
   assert.equal(state.stats.sponsorsFound, 2);
   assert.equal(state.cachedVideos, 1);
   assert.ok(state.stats.estimatedCost > 0);

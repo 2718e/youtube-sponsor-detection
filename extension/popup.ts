@@ -54,6 +54,8 @@ async function load() {
   $<HTMLInputElement>('engineFound').value = String(engine.found);
   $<HTMLInputElement>('engineMaybe').value = String(engine.maybe);
   $<HTMLInputElement>('engineKeep').value = String(engine.keepContent);
+  $<HTMLSelectElement>('boundaryStrategy').value = settings.boundaryStrategy;
+  $<HTMLSelectElement>('cut').value = settings.cut;
 
   // Usage
   const totalCost = stats.estimatedCost ?? 0;
@@ -234,6 +236,12 @@ for (const id of ['engineFound', 'engineMaybe', 'engineKeep']) {
     };
     await send({ type: 'set-settings', settings: { engine } });
     load();
+  });
+}
+
+for (const id of ['boundaryStrategy', 'cut']) {
+  $<HTMLSelectElement>(id).addEventListener('change', (e) => {
+    send({ type: 'set-settings', settings: { [id]: (e.target as HTMLSelectElement).value } }).then(load);
   });
 }
 

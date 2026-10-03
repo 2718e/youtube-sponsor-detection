@@ -149,10 +149,76 @@ export function startQuestions(lines: Line[]): Questions {
 }
 
 /**
+ * Search pass, one round: which group of the span still in play holds the
+ * edge. Each round halves (or thirds) the candidates, so the edge costs about
+ * log(n) questions rather than one per phrase.
+ */
+export function searchQuestions(
+  phrases: Phrase[],
+  bounds: [number, number][],
+  edge: 'start' | 'end'
+): Questions {
+  // Each group needs the ids of the phrases it covers, and they have to be
+  // stable across requests, so the state carries the parent's numbering and
+  // every group names the phrases it holds.
+  const criteria: Record<string, string | null> = {};
+  bounds.forEach(([from, to], i) => {
+    criteria[`group_${i}`] = `${edgeRange(phrases, from, to, edge)}`;
+  });
+
+  const labels = bounds.map((_, i) => `group_${i}`).join(', ');
+  return {
+    search_group: {
+      type: 'choice',
+      instructions: {
+        question:
+          `The sponsor segment's ${edge === 'start' ? 'first' : 'last'} phrase in \`phrases\` is in exactly one ` +
+          `of the groups below. Which group holds it? Choose one of ${labels}.`,
+        ...SPONSOR
+      },
+      criteria
+    }
+  };
+}
+
+/** A range of phrases, written out so the option stands alone. */
+function edgeRange(phrases: Phrase[], from: number, to: number, edge: 'start' | 'end'): string {
+  const span =
+    from === to ? `phrase ${phrases[from].id} ("${phrases[from].text}")` : `phrases ${phrases[from].id} to ${phrases[to].id}`;
+  return edge === 'start'
+    ? `The sponsor segment begins at ${span}: ${phrases[from].id} is the first phrase that belongs to it.`
+    : `The sponsor segment ends at ${span}: ${phrases[to].id} is the last phrase that belongs to it.`;
+}
+
+/**
+ * Search pass, last round: is the phrase the search landed on really part of
+ * the sponsor segment? The same judgment the census asks per phrase, put once
+ * to the one phrase that matters, and what turns an answer into a cut.
+ */
+export function confirmQuestions(phrase: Phrase, edge: 'start' | 'end'): Questions {
+  return {
+    is_edge_phrase: {
+      type: 'noul',
+      instructions: {
+        question:
+          `Does phrase ${phrase.id} in \`phrases\` belong to the sponsor segment rather than to the video's own content? ` +
+          `It is where the sponsor segment is thought to ${edge === 'start' ? 'begin' : 'end'}.`,
+        ...SPONSOR
+      },
+      criteria: {
+        true: `Phrase ${phrase.id} is part of the sponsor segment: its lead-in, its pitch or its offer.`,
+        false: `Phrase ${phrase.id} is the video's own content: on the subject of the video (\`video_title\`), a hand-back, a sign-off, or a call to like, comment or subscribe.`
+      }
+    }
+  };
+}
+
+/**
  * Cut pass: the lines at a boundary split into phrases of a few words, and
  * one noul per phrase: is this phrase part of the sponsor segment? Asking per
  * phrase rather than "which phrase is first" keeps each judgment narrow, and
- * the answers read as a profile that code cuts at (see cutPoint).
+ * the answers read as a profile that code cuts at (see cutPoint). Costs one
+ * question per phrase, so the search pass above is the default.
  */
 export function cutQuestions(phrases: Phrase[]): Questions {
   const questions: Questions = {};

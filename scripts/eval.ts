@@ -28,6 +28,10 @@ const args = process.argv.slice(2);
 const flag = (n: string) => args.includes(n);
 const opt = (n: string, d: string): string => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
 const limit = Number(opt('--limit', 'Infinity'));
+/** Which cut pass to score: the search, or the census that asks about every phrase. */
+const boundaryStrategy = opt('--boundary', 'search') as 'search' | 'per-phrase';
+/** A calibration run cuts every segment, whatever confidence it reached. */
+const cut = flag('--cut-always') ? 'always' : 'skippable';
 /** A prediction counts as a hit when it overlaps the label this much, or starts this close. */
 const IOU_HIT = 0.5;
 const START_TOLERANCE = Number(opt('--tolerance', '15'));
@@ -67,7 +71,14 @@ for (const video of videos.slice(0, limit)) {
         throw new Error(`labels run past the end of the transcript (${formatTimestamp(transcriptEnd)})`);
       }
       const started = Date.now();
-      const result = await findSponsorSegment(lines, { client: provider, model: provider.model, title, thresholds: provider.thresholds });
+      const result = await findSponsorSegment(lines, {
+        client: provider,
+        model: provider.model,
+        title,
+        thresholds: provider.thresholds,
+        boundaryStrategy,
+        cut
+      });
       run = {
         title,
         route,

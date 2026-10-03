@@ -10,7 +10,7 @@
 import { buildLines, type Cue } from '../src/transcript.js';
 import { findSponsorSegment } from '../src/decisionModel/findSponsorSegment.js';
 import { DEFAULT_THRESHOLDS, type Thresholds } from '../src/decisionModel/thresholds.js';
-import type { SponsorResult } from '../src/decisionModel/types.js';
+import type { BoundaryStrategy, SponsorResult } from '../src/decisionModel/types.js';
 import {
   createProvider,
   PROTOCOL_PRESETS,
@@ -40,6 +40,10 @@ export interface Settings {
   maxParallelHosted: number;
   // Confidence needed before a skip happens, as the user sets it.
   threshold: number;
+  /** How the cut pass finds the boundary inside the lines at an edge. */
+  boundaryStrategy: BoundaryStrategy;
+  /** Ask the cut pass for every segment, or only for the ones that could be skipped. */
+  cut: 'skippable' | 'always';
   // USD per million input tokens, from docs.typesafe.ai/models (Sept 2026).
   // Output tokens are free. Editable in the popup.
   pricePerMillionInput: number;
@@ -59,6 +63,10 @@ export const DEFAULT_SETTINGS: Settings = {
   maxParallelLocal: DEFAULT_MAX_PARALLEL_REQUESTS,
   maxParallelHosted: DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED,
   threshold: 0.7,
+  // A search costs about log(n) questions per edge, which is what a local model
+  // can afford; the census is kept for calibration runs.
+  boundaryStrategy: 'search',
+  cut: 'skippable',
   pricePerMillionInput: 0.042,
   engine: null
 };
@@ -230,7 +238,16 @@ async function analyze({ videoId, title, cues, force }: AnalyzeMessage) {
   };
 
   const started = Date.now();
-  const result = await findSponsorSegment(lines, { client, model: settings.model, title, thresholds: engine });
+  const result = await findSponsorSegment(lines, {
+    client,
+    model: settings.model,
+    title,
+    thresholds: engine,
+    // The cut is only worth paying for at the confidence the panel would skip at.
+    skipThreshold: settings.threshold,
+    cut: settings.cut,
+    boundaryStrategy: settings.boundaryStrategy
+  });
   const usage = result.usage ?? { input_tokens: 0, output_tokens: 0 };
   const entry = {
     videoId,
