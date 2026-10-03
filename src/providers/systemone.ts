@@ -23,8 +23,8 @@ export const TYPESAFE_HOST = 'api.typesafe.ai';
 /** Most model requests in flight at once. A local server is easily overloaded
  *  by one request per transcript window all at once, so it starts low. A hosted
  *  one may tolerate more, so the two are set separately. */
-export const DEFAULT_MAX_PARALLEL_REQUESTS = 4;
-export const DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED = 4;
+export const DEFAULT_MAX_PARALLEL_REQUESTS = 2;
+export const DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED = 2;
 
 export interface ProviderConfig {
   protocol?: string;
