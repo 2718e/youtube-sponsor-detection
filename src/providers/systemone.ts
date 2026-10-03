@@ -80,6 +80,7 @@ export async function postSystemOne(
   request: CanonicalRequest,
   options: SystemOneOptions = {}
 ): Promise<unknown> {
+  console.log("Configured timeout millis", connection.timeoutMs);
   const doFetch = options.fetch ?? globalThis.fetch;
   const body = JSON.stringify(connection.model ? { model: connection.model, ...request } : request);
   const headers: Record<string, string> = { 'content-type': 'application/json', ...(connection.headers ?? {}) };
@@ -87,7 +88,7 @@ export async function postSystemOne(
 
   let lastError: Error | undefined;
   for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt) await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+    if (attempt) await new Promise((r) => setTimeout(r, 2500 * 2 ** attempt));
     let response: Response;
     try {
       response = await doFetch(connection.endpoint, {
