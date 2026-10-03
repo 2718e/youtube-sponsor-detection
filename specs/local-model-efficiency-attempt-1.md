@@ -10,5 +10,8 @@ Suspiction: either timeouts are happening or local model is going down due to be
 
 Focusing on relatively easy fixes to solve the problem
 
-Check if calls to the model have a timeout, whether explicitly defined or implicit as the default in a library. If there is, can we increase it to 30 seconds
-Limit the amount of parallel calls to the model. Queue them up and only have a maximum of MAX_PARALLEL_REQUESTS=4 running at once.
+### Avoid too many simulataneous requests
+
+Limit the amount of parallel calls to the model. Have a configurable maximum of MAX_PARALLEL_REQUESTS=4 running at once.
+Retries should also be part of this limit.
+

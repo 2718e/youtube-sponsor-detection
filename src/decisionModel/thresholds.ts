@@ -8,7 +8,7 @@
 
 /** Confidence bands, following the cookbook's 0.7 / 0.35 split. Tune on real data. */
 export const FOUND = 0.7;
-export const MAYBE = 0.35;
+export const MAYBE = 0.5;
 
 export interface Thresholds {
   found: number;

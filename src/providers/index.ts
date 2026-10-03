@@ -13,8 +13,11 @@
 
 import {
   createSystemOneProvider,
+  DEFAULT_MAX_PARALLEL_REQUESTS,
+  DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED,
   DEFAULT_MODEL,
   DEFAULT_URL,
+  isLocalUrl,
   type ModelProvider,
   type ProviderConfig
 } from './systemone.js';
@@ -64,4 +67,10 @@ export function providerFromEnv(env: ProviderEnv = globalThis.process?.env ?? {}
 }
 
 export type { ModelProvider, ProviderConfig };
-export { DEFAULT_MODEL, DEFAULT_URL };
+export {
+  DEFAULT_MAX_PARALLEL_REQUESTS,
+  DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED,
+  DEFAULT_MODEL,
+  DEFAULT_URL,
+  isLocalUrl
+};

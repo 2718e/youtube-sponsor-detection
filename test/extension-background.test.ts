@@ -167,4 +167,19 @@ test('the default settings point at a local server', async () => {
   assert.equal(state.provider.endpoint, 'http://localhost:8000/v1/systemone');
   assert.equal(state.provider.isLocal, true);
   assert.equal(state.provider.requiresKey, false);
+  assert.equal(state.settings.maxParallelLocal, 4);
+  assert.equal(state.settings.maxParallelHosted, 4);
+  assert.equal(state.provider.maxParallel, 4);
+});
+
+test('the parallel cap follows the endpoint kind', async () => {
+  await ask({ type: 'set-settings', settings: { modelUrl: 'http://127.0.0.1:8009', maxParallelLocal: 1, maxParallelHosted: 9 } });
+  const local = await ask({ type: 'get-state' });
+  assert.equal(local.provider.isLocal, true);
+  assert.equal(local.provider.maxParallel, 1);
+
+  await ask({ type: 'set-settings', settings: { modelUrl: 'https://api.typesafe.ai', apiKey: 'apikey_test' } });
+  const hosted = await ask({ type: 'get-state' });
+  assert.equal(hosted.provider.isLocal, false);
+  assert.equal(hosted.provider.maxParallel, 9);
 });

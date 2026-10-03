@@ -11,11 +11,11 @@ import { type Ask, type Report, type Scan, type SponsorSegment } from './types.j
 /** Lines of context kept around the anchor in the refine pass. A lead-in
  *  story can run three or four minutes before the sponsor is even named, so
  *  the reach backwards is generous. */
-const REFINE_BEFORE = 45;
-const REFINE_AFTER = 40;
+const REFINE_BEFORE = 20;
+const REFINE_AFTER = 10;
 
 /** Lines masked after a start when the refine pass could not find the end. */
-const BLIND_MASK_LINES = 12;
+const BLIND_MASK_LINES = 10;
 
 /**
  * Pin down one candidate. Two requests: the first confirms the segment and

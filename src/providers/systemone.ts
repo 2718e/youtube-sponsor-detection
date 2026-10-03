@@ -10,6 +10,7 @@
 // is normalized against the questions that were asked.
 
 import { normalizeAnswer, type CanonicalRequest, type ProviderAnswer } from './contract.js';
+import { limiterFor } from './limit.js';
 import { DEFAULT_THRESHOLDS, type Thresholds } from '../decisionModel/thresholds.js';
 
 /** Where a local Jev-compatible server usually listens. */
@@ -19,12 +20,20 @@ export const DEFAULT_MODEL = 'jev-latest';
 /** Where the hosted TypeSafe API lives: the only host a TypeSafe key is sent to. */
 export const TYPESAFE_HOST = 'api.typesafe.ai';
 
+/** Most model requests in flight at once. A local server is easily overloaded
+ *  by one request per transcript window all at once, so it starts low. A hosted
+ *  one may tolerate more, so the two are set separately. */
+export const DEFAULT_MAX_PARALLEL_REQUESTS = 4;
+export const DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED = 4;
+
 export interface ProviderConfig {
   protocol?: string;
   url?: string;
   model?: string;
   apiKey?: string;
   timeoutMs?: number;
+  /** Most requests in flight at once; the caller's local/hosted default when unset. */
+  maxParallel?: number;
   thresholds?: Partial<Thresholds>;
 }
 
@@ -51,6 +60,7 @@ export interface ModelProvider {
   isLocal: boolean;
   requiresKey: boolean;
   hasKey: boolean;
+  maxParallel: number;
   thresholds: Thresholds;
   systemOne(request: CanonicalRequest, options?: SystemOneOptions): Promise<ProviderAnswer>;
   health(options?: SystemOneOptions): Promise<ProviderHealth>;
@@ -80,6 +90,7 @@ export async function postSystemOne(
   request: CanonicalRequest,
   options: SystemOneOptions = {}
 ): Promise<unknown> {
+  console.log("Configured timeout millis", connection.timeoutMs);
   const doFetch = options.fetch ?? globalThis.fetch;
   const body = JSON.stringify(connection.model ? { model: connection.model, ...request } : request);
   const headers: Record<string, string> = { 'content-type': 'application/json', ...(connection.headers ?? {}) };
@@ -87,7 +98,7 @@ export async function postSystemOne(
 
   let lastError: Error | undefined;
   for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt) await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+    if (attempt) await new Promise((r) => setTimeout(r, 2500 * 2 ** attempt));
     let response: Response;
     try {
       response = await doFetch(connection.endpoint, {
@@ -114,6 +125,17 @@ export async function postSystemOne(
   throw lastError ?? new Error(`Could not reach ${connection.endpoint}`);
 }
 
+/** Whether a configured URL points at this machine, where the model is. */
+export function isLocalUrl(url: string): boolean {
+  let host = '';
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    host = '';
+  }
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+}
+
 /**
  * The canonical shape of this provider's configuration.
  */
@@ -130,16 +152,23 @@ export function createSystemOneProvider(config: ProviderConfig = {}): ModelProvi
   } catch {
     host = '';
   }
-  const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+  const isLocal = isLocalUrl(url);
+  const requested = Number(config.maxParallel);
+  const fallback = isLocal ? DEFAULT_MAX_PARALLEL_REQUESTS : DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED;
+  const maxParallel = Number.isFinite(requested) && requested >= 1 ? Math.floor(requested) : fallback;
   // The user's TypeSafe key is only ever sent to TypeSafe, whatever URL is
   // configured. A local server needs no key; a self-hosted one that does can be
   // given its own headers by a future adapter.
   const key = host === TYPESAFE_HOST ? apiKey : '';
+  // One limiter per endpoint, shared with any other provider pointed at it. The
+  // whole retry loop runs inside it, so a retry holds its slot rather than
+  // entering a fresh one.
+  const limiter = limiterFor(endpoint, maxParallel);
 
   const systemOne = (request: CanonicalRequest, options?: SystemOneOptions) =>
-    postSystemOne({ endpoint, apiKey: key, model, timeoutMs }, request, options).then((result) =>
-      normalizeAnswer(result, request?.questions)
-    );
+    limiter
+      .run(() => postSystemOne({ endpoint, apiKey: key, model, timeoutMs }, request, options))
+      .then((result) => normalizeAnswer(result, request?.questions));
 
   return {
     protocol: 'systemone',
@@ -150,6 +179,7 @@ export function createSystemOneProvider(config: ProviderConfig = {}): ModelProvi
     isLocal,
     requiresKey: host === TYPESAFE_HOST,
     hasKey: host !== TYPESAFE_HOST || Boolean(key),
+    maxParallel,
     // This protocol's probabilities come from Jev itself or a Jev-compatible
     // model, so its bands are the pipeline's defaults until a calibration run
     // says otherwise.

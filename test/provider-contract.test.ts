@@ -13,6 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { createProvider, PROTOCOLS, PROTOCOL_PRESETS } from '../src/providers/index.js';
 import { assertCanonical, normalizeAnswer, type Questions } from '../src/providers/contract.js';
 import { createSystemOneProvider, TYPESAFE_HOST } from '../src/providers/systemone.js';
+import { resetLimiters } from '../src/providers/limit.js';
 import { createStubClient } from './stub-client.js';
 import { buildLines, type Cue } from '../src/transcript.js';
 import { findSponsorSegment } from '../src/decisionModel/findSponsorSegment.js';
@@ -127,4 +128,70 @@ test('the default provider is a local server, not the hosted one', () => {
   assert.equal(provider.isLocal, true);
   assert.equal(provider.requiresKey, false);
   assert.equal(provider.url, 'http://localhost:8000');
+});
+
+// ---- the parallel request cap ---------------------------------------------
+
+/** A Response stand-in: enough of one for the retry loop to read. */
+const okResponse = { ok: true, status: 200, json: async () => ({ answers: {} }) } as unknown as Response;
+const busyResponse = { ok: false, status: 500, text: async () => 'busy' } as unknown as Response;
+
+test('the cap defaults to four for a local and a hosted endpoint alike', () => {
+  resetLimiters();
+  assert.equal(createSystemOneProvider({ url: 'http://127.0.0.1:8196' }).maxParallel, 4);
+  assert.equal(createSystemOneProvider({ url: `https://${TYPESAFE_HOST}` }).maxParallel, 4);
+  assert.equal(createSystemOneProvider({ url: 'http://127.0.0.1:8196', maxParallel: 2 }).maxParallel, 2);
+});
+
+test('no more than maxParallel requests are in flight at once', async () => {
+  resetLimiters();
+  const provider = createSystemOneProvider({ url: 'http://127.0.0.1:8197', maxParallel: 2 });
+  let inFlight = 0;
+  let peak = 0;
+  const fakeFetch = (async () => {
+    inFlight += 1;
+    peak = Math.max(peak, inFlight);
+    await new Promise((r) => setTimeout(r, 3));
+    inFlight -= 1;
+    return okResponse;
+  }) as unknown as typeof fetch;
+
+  await Promise.all(
+    Array.from({ length: 7 }, () => provider.systemOne({ state: {}, questions: {} }, { fetch: fakeFetch }))
+  );
+
+  assert.equal(peak, 2);
+  assert.equal(inFlight, 0);
+});
+
+test('a retry holds its slot, so retries count against the same cap', async (t) => {
+  resetLimiters();
+  // The first retry waits 5s, which the test does not.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const provider = createSystemOneProvider({ url: 'http://127.0.0.1:8198', maxParallel: 1 });
+  let attempts = 0;
+  let inFlight = 0;
+  let peak = 0;
+  const fakeFetch = (async () => {
+    inFlight += 1;
+    peak = Math.max(peak, inFlight);
+    attempts += 1;
+    const first = attempts === 1;
+    inFlight -= 1;
+    return first ? busyResponse : okResponse;
+  }) as unknown as typeof fetch;
+
+  const first = provider.systemOne({ state: {}, questions: {} }, { fetch: fakeFetch });
+  const second = provider.systemOne({ state: {}, questions: {} }, { fetch: fakeFetch });
+  // Let the first attempt fail and enter its backoff; only microtasks run, so
+  // the mocked timer cannot be what drains this.
+  for (let i = 0; i < 50; i++) await Promise.resolve();
+  assert.equal(attempts, 1, 'the second call waits while the first backs off');
+  assert.equal(peak, 1);
+
+  t.mock.timers.tick(5000);
+  await Promise.all([first, second]);
+
+  assert.equal(attempts, 3, 'the retry, then the second call');
+  assert.equal(peak, 1, 'one slot held across the retry');
 });
