@@ -14,8 +14,11 @@ import type { SponsorResult } from '../src/decisionModel/types.js';
 import {
   createProvider,
   PROTOCOL_PRESETS,
+  DEFAULT_MAX_PARALLEL_REQUESTS,
+  DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED,
   DEFAULT_URL,
   DEFAULT_MODEL,
+  isLocalUrl,
   type ModelProvider,
   type ProtocolPreset
 } from '../src/providers/index.js';
@@ -30,6 +33,11 @@ export interface Settings {
   apiKey: string;
   model: string;
   autoSkip: boolean;
+  // Most requests in flight at once, per endpoint. A local server is easily
+  // overloaded by one request per transcript window, so it and a hosted one are
+  // set separately. Retries count against the same limit.
+  maxParallelLocal: number;
+  maxParallelHosted: number;
   // Confidence needed before a skip happens, as the user sets it.
   threshold: number;
   // USD per million input tokens, from docs.typesafe.ai/models (Sept 2026).
@@ -48,6 +56,8 @@ export const DEFAULT_SETTINGS: Settings = {
   apiKey: '',
   model: DEFAULT_MODEL,
   autoSkip: true,
+  maxParallelLocal: DEFAULT_MAX_PARALLEL_REQUESTS,
+  maxParallelHosted: DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED,
   threshold: 0.7,
   pricePerMillionInput: 0.042,
   engine: null
@@ -82,6 +92,7 @@ export interface ProviderDescription {
   isLocal?: boolean;
   requiresKey?: boolean;
   hasKey?: boolean;
+  maxParallel?: number;
   thresholds?: Thresholds | null;
   error?: string;
 }
@@ -135,6 +146,7 @@ function providerFor(settings: Settings): ModelProvider {
     url: settings.modelUrl,
     model: settings.model,
     apiKey: settings.apiKey,
+    maxParallel: isLocalUrl(settings.modelUrl) ? settings.maxParallelLocal : settings.maxParallelHosted,
     thresholds: settings.engine ?? undefined
   });
 }
@@ -171,6 +183,7 @@ function describeProvider(settings: Settings): ProviderDescription {
       isLocal: provider.isLocal,
       requiresKey: provider.requiresKey,
       hasKey: provider.hasKey,
+      maxParallel: provider.maxParallel,
       thresholds: provider.thresholds ?? null
     };
   } catch (error) {

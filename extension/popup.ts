@@ -49,6 +49,8 @@ async function load() {
 
   // Advanced
   $<HTMLInputElement>('price').value = String(settings.pricePerMillionInput);
+  $<HTMLInputElement>('maxParallelLocal').value = String(settings.maxParallelLocal);
+  $<HTMLInputElement>('maxParallelHosted').value = String(settings.maxParallelHosted);
   $<HTMLInputElement>('engineFound').value = String(engine.found);
   $<HTMLInputElement>('engineMaybe').value = String(engine.maybe);
   $<HTMLInputElement>('engineKeep').value = String(engine.keepContent);
@@ -215,6 +217,13 @@ $<HTMLInputElement>('threshold').addEventListener('change', (e) =>
 $<HTMLInputElement>('price').addEventListener('change', (e) =>
   send({ type: 'set-settings', settings: { pricePerMillionInput: Number((e.target as HTMLInputElement).value) || 0 } }).then(load)
 );
+
+for (const id of ['maxParallelLocal', 'maxParallelHosted']) {
+  $<HTMLInputElement>(id).addEventListener('change', (e) => {
+    const value = Math.max(1, Math.floor(Number((e.target as HTMLInputElement).value) || 1));
+    send({ type: 'set-settings', settings: { [id]: value } }).then(load);
+  });
+}
 
 for (const id of ['engineFound', 'engineMaybe', 'engineKeep']) {
   $(id).addEventListener('change', async () => {
