@@ -56,6 +56,7 @@ async function load() {
   $<HTMLInputElement>('engineKeep').value = String(engine.keepContent);
   $<HTMLSelectElement>('boundaryStrategy').value = settings.boundaryStrategy;
   $<HTMLSelectElement>('cut').value = settings.cut;
+  $<HTMLInputElement>('sendMetadata').checked = settings.sendMetadata;
 
   // Usage
   const totalCost = stats.estimatedCost ?? 0;
@@ -244,6 +245,10 @@ for (const id of ['boundaryStrategy', 'cut']) {
     send({ type: 'set-settings', settings: { [id]: (e.target as HTMLSelectElement).value } }).then(load);
   });
 }
+
+$<HTMLInputElement>('sendMetadata').addEventListener('change', (e) =>
+  send({ type: 'set-settings', settings: { sendMetadata: (e.target as HTMLInputElement).checked } }).then(load)
+);
 
 $('resetEngine').addEventListener('click', () => send({ type: 'set-settings', settings: { engine: null } }).then(load));
 $('resetStats').addEventListener('click', () => send({ type: 'reset-stats' }).then(load));

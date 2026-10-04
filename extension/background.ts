@@ -47,6 +47,9 @@ export interface Settings {
   // USD per million input tokens, from docs.typesafe.ai/models (Sept 2026).
   // Output tokens are free. Editable in the popup.
   pricePerMillionInput: number;
+  // Attach the video's url to each request, so a local server that records
+  // annotated requests can keep them for tuning. Never sent to a hosted model.
+  sendMetadata: boolean;
   // The pipeline's own bands, which are calibrated per model. null means "use
   // whatever the provider says", which is right until the user overrides them.
   engine: Partial<Thresholds> | null;
@@ -68,6 +71,7 @@ export const DEFAULT_SETTINGS: Settings = {
   boundaryStrategy: 'search',
   cut: 'skippable',
   pricePerMillionInput: 0.042,
+  sendMetadata: true,
   engine: null
 };
 
@@ -155,6 +159,7 @@ function providerFor(settings: Settings): ModelProvider {
     model: settings.model,
     apiKey: settings.apiKey,
     maxParallel: isLocalUrl(settings.modelUrl) ? settings.maxParallelLocal : settings.maxParallelHosted,
+    sendMetadata: settings.sendMetadata,
     thresholds: settings.engine ?? undefined
   });
 }
@@ -230,10 +235,11 @@ async function analyze({ videoId, title, cues, force }: AnalyzeMessage) {
   if (!lines.length) throw new Error('The transcript was empty.');
 
   let requests = 0;
+  const videoUri = `https://www.youtube.com/watch?v=${videoId}`;
   const client = {
     systemOne(request: Parameters<ModelProvider['systemOne']>[0]) {
       requests += 1;
-      return provider.systemOne(request);
+      return provider.systemOne(request, { uri: videoUri });
     }
   };
 

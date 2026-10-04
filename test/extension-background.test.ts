@@ -132,6 +132,30 @@ test('a local provider needs no key, gets no Authorization header and is not pri
   }
 });
 
+test('metadata rides along only for a local model and only when asked', async () => {
+  // Hosted, even with the flag on: the video's url must not leave for TypeSafe.
+  await ask({ type: 'set-settings', settings: { modelUrl: 'https://api.typesafe.ai', apiKey: 'apikey_test', sendMetadata: true } });
+  let before = calls.length;
+  await ask({ type: 'analyze', videoId: 'meta-hosted', title: 't', cues: fixture.cues, force: true });
+  for (const call of calls.slice(before)) assert.equal(call.body.metadata, undefined);
+
+  // Local with the flag off: nothing extra either.
+  await ask({ type: 'set-settings', settings: { modelUrl: 'http://127.0.0.1:8009', sendMetadata: false } });
+  before = calls.length;
+  await ask({ type: 'analyze', videoId: 'meta-off', title: 't', cues: fixture.cues, force: true });
+  for (const call of calls.slice(before)) assert.equal(call.body.metadata, undefined);
+
+  // Local with the flag on: every request carries the same video.
+  before = calls.length;
+  await ask({ type: 'set-settings', settings: { sendMetadata: true } });
+  await ask({ type: 'analyze', videoId: 'meta-on', title: 't', cues: fixture.cues, force: true });
+  const mine = calls.slice(before);
+  assert.ok(mine.length > 0);
+  for (const call of mine) {
+    assert.deepEqual(call.body.metadata, { clientId: 'yt-sponsor-skip', uri: 'https://www.youtube.com/watch?v=meta-on' });
+  }
+});
+
 test('test-provider uses the fields as typed, without saving them', async () => {
   const before = calls.length;
   const r = await ask({ type: 'test-provider', provider: { protocol: 'systemone', modelUrl: 'http://127.0.0.1:8010', model: 'kev-4b' } });
@@ -169,6 +193,7 @@ test('the default settings point at a local server', async () => {
   assert.equal(state.provider.requiresKey, false);
   assert.equal(state.settings.maxParallelLocal, 4);
   assert.equal(state.settings.maxParallelHosted, 4);
+  assert.equal(state.settings.sendMetadata, false);
   assert.equal(state.provider.maxParallel, 4);
 });
 

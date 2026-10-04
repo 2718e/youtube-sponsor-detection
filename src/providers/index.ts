@@ -9,7 +9,7 @@
 // Configuration is deliberately just data, so the same shape is written by the
 // extension popup, read from .env, or passed on the command line:
 //
-//   { protocol: 'systemone', url, model, apiKey, timeoutMs }
+//   { protocol: 'systemone', url, model, apiKey, timeoutMs, sendMetadata }
 
 import {
   createSystemOneProvider,
