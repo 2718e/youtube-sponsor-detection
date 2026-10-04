@@ -195,3 +195,46 @@ test('a retry holds its slot, so retries count against the same cap', async (t) 
   assert.equal(attempts, 3, 'the retry, then the second call');
   assert.equal(peak, 1, 'one slot held across the retry');
 });
+
+// ---- the metadata a local model may record --------------------------------
+
+const EXAMPLE_URI = 'https://www.youtube.com/watch?v=abc';
+
+/** A fake fetch that keeps the body of every request it is given. */
+function bodyRecorder() {
+  const bodies: Record<string, any>[] = [];
+  const fakeFetch = (async (_url: string, init: { body: string }) => {
+    bodies.push(JSON.parse(init.body));
+    return okResponse;
+  }) as unknown as typeof fetch;
+  return { bodies, fakeFetch };
+}
+
+test('a local model is sent the video metadata when the flag is on', async () => {
+  const { bodies, fakeFetch } = bodyRecorder();
+  const provider = createSystemOneProvider({ url: 'http://127.0.0.1:8201', sendMetadata: true });
+  await provider.systemOne({ state: {}, questions: {} }, { fetch: fakeFetch, uri: EXAMPLE_URI });
+  assert.deepEqual(bodies[0].metadata, { clientId: 'yt-sponsor-skip', uri: EXAMPLE_URI });
+  assert.equal(bodies[0].uri, undefined, 'the uri travels as metadata, not as a protocol field');
+});
+
+test('a local model is sent nothing extra when the flag is off', async () => {
+  const { bodies, fakeFetch } = bodyRecorder();
+  const provider = createSystemOneProvider({ url: 'http://127.0.0.1:8202' });
+  await provider.systemOne({ state: {}, questions: {} }, { fetch: fakeFetch, uri: EXAMPLE_URI });
+  assert.equal(bodies[0].metadata, undefined);
+});
+
+test('a hosted model never gets metadata, even with the flag on', async () => {
+  const { bodies, fakeFetch } = bodyRecorder();
+  const provider = createSystemOneProvider({ url: `https://${TYPESAFE_HOST}`, apiKey: 'key', sendMetadata: true });
+  await provider.systemOne({ state: {}, questions: {} }, { fetch: fakeFetch, uri: EXAMPLE_URI });
+  assert.equal(bodies[0].metadata, undefined);
+});
+
+test('a request with no video uri carries no metadata', async () => {
+  const { bodies, fakeFetch } = bodyRecorder();
+  const provider = createSystemOneProvider({ url: 'http://127.0.0.1:8203', sendMetadata: true });
+  await provider.systemOne({ state: {}, questions: {} }, { fetch: fakeFetch });
+  assert.equal(bodies[0].metadata, undefined);
+});

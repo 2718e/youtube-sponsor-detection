@@ -20,11 +20,14 @@ export const DEFAULT_MODEL = 'jev-latest';
 /** Where the hosted TypeSafe API lives: the only host a TypeSafe key is sent to. */
 export const TYPESAFE_HOST = 'api.typesafe.ai';
 
+/** Names this app to a local server that saves annotated requests for tuning. */
+export const METADATA_CLIENT_ID = 'yt-sponsor-skip';
+
 /** Most model requests in flight at once. A local server is easily overloaded
  *  by one request per transcript window all at once, so it starts low. A hosted
  *  one may tolerate more, so the two are set separately. */
-export const DEFAULT_MAX_PARALLEL_REQUESTS = 4;
-export const DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED = 4;
+export const DEFAULT_MAX_PARALLEL_REQUESTS = 2;
+export const DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED = 2;
 
 export interface ProviderConfig {
   protocol?: string;
@@ -34,12 +37,16 @@ export interface ProviderConfig {
   timeoutMs?: number;
   /** Most requests in flight at once; the caller's local/hosted default when unset. */
   maxParallel?: number;
+  /** Attach this run's uri to each request, for a local server that records it. Ignored for a hosted model. */
+  sendMetadata?: boolean;
   thresholds?: Partial<Thresholds>;
 }
 
 export interface SystemOneOptions {
   signal?: AbortSignal;
   fetch?: typeof fetch;
+  /** The video a request is about; sent as metadata when the provider is local and sendMetadata is on. */
+  uri?: string;
 }
 
 export interface ProviderHealth {
@@ -72,6 +79,7 @@ interface Connection {
   model?: string;
   timeoutMs: number;
   headers?: Record<string, string>;
+  sendMetadata: boolean;
 }
 
 /**
@@ -80,6 +88,17 @@ interface Connection {
  */
 function retryable(response: Response): boolean {
   return response.status === 408 || response.status === 429 || response.status >= 500;
+}
+
+/**
+ * The wire body: the canonical request, plus the model name, plus the metadata
+ * a local server wants. `uri` is a call option, not part of the protocol, so it
+ * never travels as itself.
+ */
+function requestBody(connection: Connection, request: CanonicalRequest, uri?: string): string {
+  const fields: Record<string, unknown> = connection.model ? { model: connection.model, ...request } : { ...request };
+  if (connection.sendMetadata && uri) fields.metadata = { clientId: METADATA_CLIENT_ID, uri };
+  return JSON.stringify(fields);
 }
 
 /**
@@ -92,7 +111,7 @@ export async function postSystemOne(
 ): Promise<unknown> {
   console.log("Configured timeout millis", connection.timeoutMs);
   const doFetch = options.fetch ?? globalThis.fetch;
-  const body = JSON.stringify(connection.model ? { model: connection.model, ...request } : request);
+  const body = requestBody(connection, request, options.uri);
   const headers: Record<string, string> = { 'content-type': 'application/json', ...(connection.headers ?? {}) };
   if (connection.apiKey) headers.authorization = `Bearer ${connection.apiKey}`;
 
@@ -153,6 +172,8 @@ export function createSystemOneProvider(config: ProviderConfig = {}): ModelProvi
     host = '';
   }
   const isLocal = isLocalUrl(url);
+  // A hosted model never gets this app's metadata, whatever the flag says.
+  const sendMetadata = isLocal && Boolean(config.sendMetadata);
   const requested = Number(config.maxParallel);
   const fallback = isLocal ? DEFAULT_MAX_PARALLEL_REQUESTS : DEFAULT_MAX_PARALLEL_REQUESTS_HOSTED;
   const maxParallel = Number.isFinite(requested) && requested >= 1 ? Math.floor(requested) : fallback;
@@ -167,7 +188,7 @@ export function createSystemOneProvider(config: ProviderConfig = {}): ModelProvi
 
   const systemOne = (request: CanonicalRequest, options?: SystemOneOptions) =>
     limiter
-      .run(() => postSystemOne({ endpoint, apiKey: key, model, timeoutMs }, request, options))
+      .run(() => postSystemOne({ endpoint, apiKey: key, model, timeoutMs, sendMetadata }, request, options))
       .then((result) => normalizeAnswer(result, request?.questions));
 
   return {

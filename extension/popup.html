@@ -76,6 +76,9 @@
     </select>
   </label>
   <p class="hint">A search asks about a group of phrases a round, so it costs about log(n) questions instead of one per phrase. Cutting always spends those requests on reads too unsure to skip.</p>
+  <h2>Tuning</h2>
+  <label class="switch"><input id="sendMetadata" type="checkbox" /><span>Send the video's url with each request</span></label>
+  <p class="hint">Only for a local server: one that records annotated requests keeps them for inspection. Metadata is never sent to a hosted model.</p>
   <h2>Model calibration</h2>
   <label class="field inline"><span>Confident from</span><input id="engineFound" type="number" step="0.05" min="0" max="1" /></label>
   <label class="field inline"><span>Worth refining from</span><input id="engineMaybe" type="number" step="0.05" min="0" max="1" /></label>
